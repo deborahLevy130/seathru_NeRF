@@ -1,0 +1,42 @@
+Config.dataset_loader = 'llff'
+Config.near = 0.
+Config.far = 1.
+Config.factor = 4
+Config.forward_facing = True
+Config.adam_eps = 1e-8
+Config.batch_size = 2048
+Config.eval_on_train = False # TODO Naama
+Config.eval_only_once = True
+Config.eval_save_ray_data = True # TODO Naame
+Config.lr_init = 0.00025
+Config.lr_final = 0.000025
+Config.max_steps = 2000000
+Model.ray_shape = 'cylinder'
+Model.opaque_background = True
+Model.num_levels = 2
+Model.num_prop_samples = 128
+Model.num_nerf_samples = 32
+
+PropMLP.net_depth = 4
+PropMLP.net_width = 256
+PropMLP.basis_shape = 'octahedron'
+PropMLP.basis_subdivisions = 1
+PropMLP.disable_density_normals = True
+PropMLP.disable_rgb = True
+
+NerfMLP.net_depth = 8
+NerfMLP.net_width = 256
+NerfMLP.basis_shape = 'octahedron'
+NerfMLP.basis_subdivisions = 1
+NerfMLP.disable_density_normals = True
+
+NerfMLP.max_deg_point = 16
+PropMLP.max_deg_point = 16
+
+# RGB activation we use for linear color outputs is exp(x - 5).
+# NerfMLP.rgb_padding = 0.
+# NerfMLP.rgb_activation = @math.safe_exp
+# NerfMLP.rgb_bias = -5.
+# PropMLP.rgb_padding = 0.
+# PropMLP.rgb_activation = @math.safe_exp
+# PropMLP.rgb_bias = -5.
