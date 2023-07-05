@@ -10,8 +10,7 @@
 Our implementation is based on the paper "Mip-NeRF 360: Unbounded Anti-Aliased Neural Radiance Fields" (CVPR 2022) and their [github repository](https://github.com/google-research/multinerf).
 
 
-This implementation is written in [JAX](https://github.com/google/jax), and
-is a fork of [mip-NeRF](https://github.com/google/mipnerf).
+This implementation is written in [JAX](https://github.com/google/jax).
 
 ## Setup
 
@@ -58,58 +57,53 @@ decrease batch size by.
 
 Summary: first, calculate poses. Second, train SeaThru-NeRF. Third, render a result video from the trained NeRF model.
 
-1. Calculating poses (using COLMAP):
-```
-DATA_DIR=my_dataset_dir
-bash scripts/local_colmap_and_resize.sh ${DATA_DIR}
-```
+1. Calculating poses (using [COLMAP](https://colmap.github.io/install.html)):
+
 2. Training SeaThru-NeRF:
 ```
-python -m train \
-  --gin_configs=configs/llff_256_uw.gin \
-  --gin_bindings="Config.data_dir = '${DATA_DIR}'" \
-  --gin_bindings="Config.checkpoint_dir = '${DATA_DIR}/checkpoints'" \
-  --logtostderr
+./scripts/train_llff_uw.sh
 ```
-3. Rendering SeaThru-NeRF:
-```
-python -m render \
-  --gin_configs=configs/llff_256_uw.gin \
-  --gin_bindings="Config.data_dir = '${DATA_DIR}'" \
-  --gin_bindings="Config.checkpoint_dir = '${DATA_DIR}/checkpoints'" \
-  --gin_bindings="Config.render_dir = '${DATA_DIR}/render'" \
-  --gin_bindings="Config.render_path = True" \
-  --gin_bindings="Config.render_path_frames = 240" \
-  --gin_bindings="Config.render_video_fps = 15" \
-  --logtostderr
-```
-Your output video should now exist in the directory `my_dataset_dir/render/`.
+set `SCENE` to the image set you wish to use
 
+3. Evaluating SeaThru-NeRF on existing images:
+
+```
+./scripts/render_llff_uw.sh
+```
+set `SCENE` and `EXPERIMENT_NAME` to the corresponding experiment.
+
+4. Rendering SeaThru-NeRF Novel Views:
+```
+./scripts/render_llff_uw.sh
+```
+set `SCENE` and `EXPERIMENT_NAME` to the corresponding experiment.
+
+Your output video should now exist in the directory `ckpt/uw/${SCENE}_${EXPERIMENT_NAME}/render/`.
+You will find the underwater rendering, the restored images rendering (J) and the depth maps.
 ## Datasets
 
 [Here](https://drive.google.com/uc?export=download&id=1RzojBFvBWjUUhuJb95xJPSNP3nJwZWaT) you will find the underwater scenes from the paper.
 Extract the files into the data folder and you can train SeaThru-NeRF with those scenes:
+
 ```
-python -m train \
-  --gin_configs=configs/llff_256_uw.gin \
-  --gin_bindings="Config.data_dir = 'data/${DATA_DIR}'" \
-  --gin_bindings="Config.checkpoint_dir = '${DATA_DIR}/checkpoints'" \
-  --logtostderr
+./scripts/train_llff_uw.sh
 ```
 
-In ```'${DATA_DIR}'``` put the name of the scene you wish to work with. 
+In ```'${SCENE}'``` put the name of the scene you wish to work with. 
 
 ### Running SeaThru-NeRF on your own data
 
-In order to run SeaThru-NeRF on your own captured images of a scene, you must first run [COLMAP](https://colmap.github.io/install.html) to calculate camera poses. You can do this using our provided script `scripts/local_colmap_and_resize.sh`. Just make a directory `my_dataset_dir/` and copy your input images into a folder `my_dataset_dir/images/`, then run:
-
-```
+In order to run SeaThru-NeRF on your own captured images of a scene, you must first run [COLMAP](https://colmap.github.io/install.html) to calculate camera poses. After you run COLMAP, you can run [this](https://github.com/Fyusion/LLFF/blob/master/imgs2poses.py) script from LLFF to get poses_bound.npy file. 
 After you run COLMAP, all you need to do to load your scene in SeaThru-NeRF is ensure it has the following format:
 ```
 my_dataset_dir/images_wb/    <--- all input images
 my_dataset_dir/sparse/0/  <--- COLMAP sparse reconstruction files (cameras, images, points)
+my_dataset_dir/poses_bounds.npy
 ```
+### Integrating SeaThru-NeRF in your NeRF
+In order to integrate our NeRF in an existing NeRF you need to implement the following steps:
 
+1. add the medium's module to the MLP. It has the same architecture the  
 
 
 
@@ -118,6 +112,14 @@ If you use this software package, please cite whichever constituent paper(s)
 you build upon, or feel free to cite this entire codebase as:
 
 ```
+@inproceedings{levy2023seathru,
+  title={SeaThru-NeRF: Neural Radiance Fields in Scattering Media},
+  author={Levy, Deborah and Peleg, Amit and Pearl, Naama and Rosenbaum, Dan and Akkaynak, Derya and Korman, Simon and Treibitz, Tali},
+  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition},
+  pages={56--65},
+  year={2023}
+}
+
 @misc{multinerf2022,
       title={{MultiNeRF}: {A} {Code} {Release} for {Mip-NeRF} 360, {Ref-NeRF}, and {RawNeRF}},
       author={Ben Mildenhall and Dor Verbin and Pratul P. Srinivasan and Peter Hedman and Ricardo Martin-Brualla and Jonathan T. Barron},

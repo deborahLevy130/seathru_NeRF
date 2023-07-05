@@ -1,4 +1,5 @@
 #!/bin/bash
+## This file was modified by Deborah Levy
 # Copyright 2022 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,10 +16,11 @@
 
 #export CUDA_VISIBLE_DEVICES=1
 
-SCENE=matanWb_strong
+SCENE=Panama
 EXPERIMENT=uw
-DATA_DIR=data/"$EXPERIMENT"/
-CHECKPOINT_DIR=ckpt/results/"$EXPERIMENT"/"$SCENE"_uw_trans_6_0_0001_water_bias_0_density_bias_minus_1_16384_depth_loss_0_001_std_loss_0001
+EXPERIMENT_NAME=debug_fog
+DATA_DIR=data/
+CHECKPOINT_DIR=ckpt/"$EXPERIMENT"/"$SCENE"_"$EXPERIMENT_NAME"
 
 rm "$CHECKPOINT_DIR"/*
 python -m train \

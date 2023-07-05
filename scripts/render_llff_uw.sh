@@ -13,19 +13,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-export CUDA_VISIBLE_DEVICES=0
+#export CUDA_VISIBLE_DEVICES=0
 
-SCENE=matanWb_strong
+SCENE=Panama
 EXPERIMENT=uw
-DATA_DIR=data/"${EXPERIMENT}"
-CHECKPOINT_DIR="ckpt/nerf_results/${EXPERIMENT}/matan_originalNerf"/
+EXPERIMENT_NAME=exp1
+DATA_DIR=data/
+CHECKPOINT_DIR=ckpt/"$EXPERIMENT"/"$SCENE"_"$EXPERIMENT_NAME"
 
 python -m render \
-  --gin_configs=configs/llff_256.gin \
+  --gin_configs=${CHECKPOINT_DIR}/config.gin \
   --gin_bindings="Config.data_dir = '${DATA_DIR}/${SCENE}'" \
   --gin_bindings="Config.checkpoint_dir = '${CHECKPOINT_DIR}'" \
   --gin_bindings="Config.render_path = True" \
-  --gin_bindings="Config.render_path_frames = 60" \
+  --gin_bindings="Config.render_path_frames = 240" \
   --gin_bindings="Config.render_dir = '${CHECKPOINT_DIR}/render/'" \
   --gin_bindings="Config.render_video_fps = 5" \
   --logtostderr

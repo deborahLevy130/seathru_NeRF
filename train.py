@@ -38,8 +38,7 @@ import numpy as np
 import wandb
 import wandb
 wandb.login(key ='eb49909999ce7a472bbdacdec6fdfeda5bc69583' ,force =True)
-wandb.init(project="test-project", entity="seathru-nerf")
-wandb.init(mode="disabled")
+wandb.init(project="test-project", entity="seathru-nerf",mode="disabled")
 
 
 configs.define_common_flags()

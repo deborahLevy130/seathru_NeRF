@@ -13,16 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-export CUDA_VISIBLE_DEVICES=0
+#export CUDA_VISIBLE_DEVICES=0
 
-SCENE=fromTali
-EXPERIMENT=llff
+SCENE=matanWb_strong
+EXPERIMENT=uw
 DATA_DIR=/root/Deborah/nerfren/load
 CHECKPOINT_DIR=ckpt/nerf_results/"$EXPERIMENT"/"$SCENE"
 
 rm "$CHECKPOINT_DIR"/*
 python -m train \
-  --gin_configs=configs/llff_256_cluster_uw.gin \
+  --gin_configs=configs/llff_256_cluster.gin \
   --gin_bindings="Config.data_dir = '${DATA_DIR}/${SCENE}'" \
   --gin_bindings="Config.checkpoint_dir = '${CHECKPOINT_DIR}'" \
   --logtostderr

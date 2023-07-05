@@ -13,13 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-export CUDA_VISIBLE_DEVICES=0
+#export CUDA_VISIBLE_DEVICES=0
 
-SCENE=matan
+SCENE=Panama
 EXPERIMENT=uw
-DATA_DIR=data/"${EXPERIMENT}"
-#CHECKPOINT_DIR="ckpt/${EXPERIMENT}/final_updated/rays/${SCENE}_125"/
-CHECKPOINT_DIR="ckpt/${EXPERIMENT}/${SCENE}_originalNerf"/
+EXPERIMENT_NAME=exp1
+DATA_DIR=data/
+CHECKPOINT_DIR=ckpt/"$EXPERIMENT"/"$SCENE"_"$EXPERIMENT_NAME"
 
 python -m eval \
   --gin_configs=${CHECKPOINT_DIR}/config.gin \
@@ -29,11 +29,8 @@ python -m eval \
   --gin_bindings="Config.eval_only_once = True" \
   --logtostderr
 
+# change Config.eval_on_train to False to get the rendering of the test set
 
-#  --gin_configs=configs/llff_256_uw.gin \
-#  --gin_bindings="Config.data_dir = '${DATA_DIR}/${SCENE}'" \
-#  --gin_bindings="Config.checkpoint_dir = '${CHECKPOINT_DIR}'" \
-#  --logtostderr
 
 
 
