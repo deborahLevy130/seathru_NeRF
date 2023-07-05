@@ -1,4 +1,4 @@
-# SeaThru-NeRF: Neural Radiance Fields In Scattering Media
+# SeaThru-NeRF: Neural Radiance Fields In Scattering Media, CVPR 2023
 
 #### [project page](https://sea-thru-nerf.github.io/) | [paper](https://openaccess.thecvf.com/content/CVPR2023/papers/Levy_SeaThru-NeRF_Neural_Radiance_Fields_in_Scattering_Media_CVPR_2023_paper.pdf)
 
