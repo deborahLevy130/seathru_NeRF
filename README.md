@@ -4,7 +4,7 @@
 
 > SeaThru-NeRF: Neural Radiance Fields In Scattering Media
 > [Deborah Levy](mailto:dlrun14@gmail.com) | Amit Peleg | Naama Pearl | Dan Rosenbaum | [Derya Akkaynak](https://www.deryaakkaynak.com/) | [Tali Treibitz](https://www.viseaon.haifa.ac.il/) | [Simon Korman](https://www.cs.haifa.ac.il/~skorman/)
-> CVPR, 2023
+> CVPR 2023
 
 
 Our implementation is based on the paper "Mip-NeRF 360: Unbounded Anti-Aliased Neural Radiance Fields" (CVPR 2022) and their [github repository](https://github.com/google-research/multinerf).
