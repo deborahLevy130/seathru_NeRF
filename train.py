@@ -1,3 +1,4 @@
+# This file was modified by Deborah Levy
 # Copyright 2022 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,10 +19,8 @@ import functools
 import gc
 import time
 import os
-# os.chdir(os.path.dirname('/root/Deborah/uw-multinerf/'))
 from absl import app
 import flax
-from flax.metrics import tensorboard
 from flax.training import checkpoints
 import gin
 from internal import configs
@@ -40,6 +39,8 @@ import wandb
 import wandb
 wandb.login(key ='eb49909999ce7a472bbdacdec6fdfeda5bc69583' ,force =True)
 wandb.init(project="test-project", entity="seathru-nerf")
+wandb.init(mode="disabled")
+
 
 configs.define_common_flags()
 jax.config.parse_flags_with_absl()
@@ -122,39 +123,19 @@ def main(unused_argv):
             reset_stats = False
 
         learning_rate = lr_fn(step)
-        # if step >= config.uw_usual_rendering:
-        #
-        #     bs_mult = config.uw_final_bs_loss_mult
-        #
-        #
-        # elif step >= config.uw_final_usual_rendering and step < config.uw_usual_rendering:
-        #     bs_mult = config.uw_initial_bs_loss_mult
-        #
-        # else:
-        #     a=
-        #     #bs_mult = config.uw_initial_bs_loss_mult
 
-        if step >= config.uw_decay_sig:
-            sig_mult = config.uw_final_sig_loss_mult
-            bs_mult = config.uw_final_bs_loss_mult
-            #config.uw_sig_med_mult = 0
-            # config.distortion_loss_mult = 0.1
+
+        if step >= config.uw_decay_acc:
+            sig_mult = config.uw_final_acc_trans_loss_mult
+            bs_mult = config.uw_final_acc_weights_loss_mult
+
 
         else:
-            sig_mult = config.uw_initial_sig_loss_mult
-            bs_mult = config.uw_initial_bs_loss_mult
+            sig_mult = config.uw_initial_acc_trans_loss_mult
+            bs_mult = config.uw_initial_acc_weights_loss_mult
 
         train_frac = jnp.clip((step - 1) / (config.max_steps - 1), 0, 1)
 
-        # For debug
-        # state, stats, rng = train_pstep(
-        #     rng,
-        #     state,
-        #     batch,
-        #     cameras,
-        #     train_frac,
-        #     step
-        # )
 
         # # with pmap
         state, stats, rngs = train_pstep(
@@ -166,8 +147,7 @@ def main(unused_argv):
             bs_mult,
             sig_mult
         )
-        # if step>13000:  # TODO:debug fern
-        #     config.print_every = 1
+
         if step % config.gc_every == 0:
             gc.collect()  # Disable automatic garbage collection for efficiency.
 
@@ -352,10 +332,10 @@ def main(unused_argv):
 
                 # TODO
                 if config.use_uw_mlp:
-                    vis_suite['J'] = rendering['J']  # rendering[-1]['J']  # TODO Naama changes
-                    vis_suite['bs'] = rendering['bs']   # rendering[-1]['bs']  # TODO Naama changes
-                    vis_suite['direct'] = rendering['direct']   # rendering[-1]['direct']  # TODO Naama changes
-                    vis_suite['c_med'] =  rendering['c_med'] # rendering[-1]['c_med']  # TODO Naama changes
+                    vis_suite['J'] = rendering['J']
+                    vis_suite['bs'] = rendering['bs']
+                    vis_suite['direct'] = rendering['direct']
+                    vis_suite['c_med'] =  rendering['c_med']
                     vis_suite['sigma_bs'] = rendering['sigma_bs']
                     vis_suite['sigma_atten'] = rendering['sigma_atten']
                     vis_suite['color'] = rendering['rgb']

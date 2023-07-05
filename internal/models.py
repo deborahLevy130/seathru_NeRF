@@ -1,3 +1,4 @@
+# This file was modified by Deborah Levy
 # Copyright 2022 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""NeRF and its MLPs, with helper functions for construction and rendering."""
+"""SeaThru-NeRF and its MLPs, with helper functions for construction and rendering."""
 
 import functools
 from typing import Any, Callable, List, Mapping, MutableMapping, Optional, Text, Tuple
@@ -22,7 +23,6 @@ import gin
 from internal import configs
 from internal import coord
 from internal import geopoly
-from internal import image
 from internal import math
 from internal import ref_utils
 from internal import render
@@ -33,7 +33,6 @@ from jax import random
 import jax.numpy as jnp
 
 gin.config.external_configurable(math.safe_exp, module='math')
-# gin.config.external_configurable(math.safe_sig, module='math')
 gin.config.external_configurable(coord.contract, module='coord')
 
 
@@ -47,7 +46,7 @@ def random_split(rng):
 
 @gin.configurable
 class Model(nn.Module):
-    """A mip-Nerf360 model containing all MLPs."""
+    """A Seathru-NeRF model containing all MLPs."""
     config: Any = None  # A Config class, must be set upon construction.
     num_prop_samples: int = 64  # The number of samples for each proposal level.
     num_nerf_samples: int = 32  # The number of samples the final nerf level.
@@ -64,15 +63,12 @@ class Model(nn.Module):
     dilation_bias: float = 0.0025  # How much to dilate intervals absolutely.
     num_glo_features: int = 0  # GLO vector length, disabled if 0.
     num_glo_embeddings: int = 1000  # Upper bound on max number of train images.
-    learned_exposure_scaling: bool = False  # Learned exposure scaling (RawNeRF).
     near_anneal_rate: Optional[float] = None  # How fast to anneal in near bound.
     near_anneal_init: float = 0.95  # Where to initialize near bound (in [0, 1]).
-    single_mlp: bool = False  # Use the NerfMLP for all rounds of sampling.
+    single_mlp: bool = False  # Use the UWMLP for all rounds of sampling.
     resample_padding: float = 0.0  # Dirichlet/alpha "padding" on the histogram.
     use_gpu_resampling: bool = False  # Use gather ops for faster GPU resampling.
     opaque_background: bool = False  # If true, make the background opaque.
-
-
 
     @nn.compact
     def __call__(
@@ -83,7 +79,7 @@ class Model(nn.Module):
             compute_extras,
             zero_glo=True,
     ):
-        """The mip-NeRF Model.
+        """The Seathru-NeRF Model.
 
         Args:
           rng: random number generator (or None for deterministic output).
@@ -99,14 +95,9 @@ class Model(nn.Module):
         # Construct MLPs. WARNING: Construction order may matter, if MLP weights are
         # being regularized.
 
-        # nerf_mlp = NerfMLP()
-        # prop_mlp = nerf_mlp if self.single_mlp else PropMLP()
-
-        # TODO
         nerf_mlp = UWMLP() if self.config.use_uw_mlp else NerfMLP()
-        # prop_mlp = UWMLP() if self.config.use_uw_mlp else PropMLP()  #TODO prop - change to: # prop_mlp = nerf_mlp if self.single_mlp else PropMLP()
-        prop_mlp = nerf_mlp if self.single_mlp else PropMLP()  # TODO prop - change to: # prop_mlp = nerf_mlp if self.single_mlp else PropMLP()
-        if self.num_glo_features>0:
+        prop_mlp = nerf_mlp if self.single_mlp else PropMLP()
+        if self.num_glo_features > 0:
             zero_glo = False
         if self.num_glo_features > 0:
             if not zero_glo:
@@ -118,17 +109,6 @@ class Model(nn.Module):
                 glo_vec = jnp.zeros(rays.origins.shape[:-1] + (self.num_glo_features,))
         else:
             glo_vec = None
-
-        if self.learned_exposure_scaling:
-            # Setup learned scaling factors for output colors.
-            max_num_exposures = self.num_glo_embeddings
-            # Initialize the learned scaling offsets at 0.
-            init_fn = jax.nn.initializers.zeros
-            exposure_scaling_offsets = nn.Embed(
-                max_num_exposures,
-                features=3,
-                embedding_init=init_fn,
-                name='exposure_scaling_offsets')
 
         # Define the mapping from normalized to metric ray distance.
         _, s_to_t = coord.construct_ray_warps(self.raydist_fn, rays.near, rays.far)
@@ -154,8 +134,7 @@ class Model(nn.Module):
 
         ray_history = []
         renderings = []
-        tdist_for_uw_mlp = []
-        sdist_for_uw_mlp = []
+
         for i_level in range(self.num_levels):
             is_prop = i_level < (self.num_levels - 1)
             num_samples = self.num_prop_samples if is_prop else self.num_nerf_samples
@@ -207,7 +186,6 @@ class Model(nn.Module):
                 domain=(init_s_near, init_s_far),
                 use_gpu_resampling=self.use_gpu_resampling)
 
-
             # Optimization will usually go nonlinear if you propagate gradients
             # through sampling.
             if self.stop_level_grad:
@@ -215,29 +193,6 @@ class Model(nn.Module):
 
             # Convert normalized distances to metric distances.
             tdist = s_to_t(sdist)
-            #
-            # if not is_prop:
-            #     tdist = jnp.concatenate([
-            #         jnp.zeros_like(tdist[..., -1:]),
-            #         tdist[..., :-1]
-            #     ],
-            #         axis=-1)
-            #
-            #     sdist = jnp.concatenate([
-            #         jnp.zeros_like(sdist[..., -1:]),
-            #         sdist[..., :-1]
-            #     ],
-            #         axis=-1)
-
-
-            # if is_prop:
-            #     tdist_for_uw_mlp.append(tdist)
-            #     sdist_for_uw_mlp.append(sdist)
-            # else:
-            #     tdist = jnp.sort(jnp.concatenate([tdist_for_uw_mlp[0],tdist],axis=-1),axis=-1)
-            #     sdist = jnp.sort(jnp.concatenate([sdist_for_uw_mlp[0],sdist],axis=-1),axis=-1)
-
-                # zeros_dists = jnp.zeros_like(tdist_for_water)
 
             # Cast our rays, by turning our distance intervals into Gaussians.
             gaussians = render.cast_rays(
@@ -265,32 +220,22 @@ class Model(nn.Module):
                 exposure=rays.exposure_values,
             )
 
-            # weights = render.compute_alpha_weights(
-            #     ray_results['density'],
-            #     tdist,
-            #     rays.directions,
-            #     opaque_background=self.opaque_background,
-            # )[0]
-
-            # TODO if underwater? computer alpha weights underwater
-            if self.config.use_uw_mlp and not is_prop and not self.config.simon_eq:  # TODO prop - add: and not is_prop
+            if self.config.use_uw_mlp and not is_prop and not self.config.gen_eq:
                 # Get the weights used by volumetric rendering (and our other losses).
-                weights, alpha, trans, bs_weights, trans_atten, alpha_bs,trans_bs = render.compute_alpha_weights_uw(
+                weights, alpha, trans, bs_weights, trans_atten, alpha_bs, trans_bs = render.compute_alpha_weights_uw(
                     density_obj=ray_results['density'],
                     sigma_bs=ray_results['sigma_bs'],
                     sigma_atten=ray_results['sigma_atten'],
-                    tdist=tdist, dirs=rays.directions,c_med=ray_results['c_med'],
-                    opaque_background=self.opaque_background,
+                    tdist=tdist, dirs=rays.directions
                 )
 
 
-            elif self.config.simon_eq and not is_prop:
-                weights, alpha, trans,alpha_bs,trans_bs,alpha_atten,trans_atten = render.compute_alpha_weights_uw_simon(
+            elif self.config.gen_eq and not is_prop:
+                weights, alpha, trans, alpha_bs, trans_bs, alpha_atten, trans_atten = render.compute_alpha_weights_uw_gen(
                     density_obj=ray_results['density'],
                     sigma_bs=ray_results['sigma_bs'],
                     sigma_atten=ray_results['sigma_atten'],
                     tdist=tdist, dirs=rays.directions,
-                    opaque_background=self.opaque_background,
                 )
 
 
@@ -303,7 +248,6 @@ class Model(nn.Module):
             #         tdist=tdist, dirs=rays.directions,
             #         opaque_background=self.opaque_background,
             #     )
-
 
             else:
                 # Get the weights used by volumetric rendering (and our other losses).
@@ -330,44 +274,15 @@ class Model(nn.Module):
                     minval=self.bg_intensity_range[0],
                     maxval=self.bg_intensity_range[1])
 
-            # RawNeRF exposure logic.
-            if rays.exposure_idx is not None:
-                # Scale output colors by the exposure.
-                ray_results['rgb'] *= rays.exposure_values[..., None, :]
-                if self.learned_exposure_scaling:
-                    exposure_idx = rays.exposure_idx[..., 0]
-                    # Force scaling offset to always be zero when exposure_idx is 0.
-                    # This constraint fixes a reference point for the scene's brightness.
-                    mask = exposure_idx > 0
-                    # Scaling is parameterized as an offset from 1.
-                    scaling = 1 + mask[..., None] * exposure_scaling_offsets(exposure_idx)
-                    ray_results['rgb'] *= scaling[..., None, :]
+            if self.config.use_uw_mlp and not is_prop and not self.config.gen_eq:
 
-            # Render each ray.
-            # rendering = render.volumetric_rendering(
-            #     ray_results['rgb'],
-            #     weights,
-            #     tdist,
-            #     bg_rgbs,
-            #     rays.far,
-            #     compute_extras,
-            #     extras={
-            #         k: v
-            #         for k, v in ray_results.items()
-            #         if k.startswith('normals') or k in ['roughness']
-            #     })
-
-            # TODO
-            if self.config.use_uw_mlp and not is_prop and not self.config.simon_eq :  # TODO prop - add: and not is_prop
-                # Render each ray.
-                rendering = render.volumetric_rendering_uw(density=ray_results['density'],sigma_bs=ray_results['sigma_bs'],
+                rendering = render.volumetric_rendering_uw(density=ray_results['density'],
                                                            rgbs=ray_results['rgb'],
                                                            c_med=ray_results['c_med'],
                                                            bs_weights=bs_weights, trans_atten=trans_atten,
                                                            trans=trans,
-                                                           weights=weights, alpha= alpha,
+                                                           weights=weights,
                                                            tdist=tdist,
-                                                           bg_rgbs=bg_rgbs,
                                                            t_far=rays.far,
                                                            compute_extras=compute_extras,
                                                            extras={
@@ -378,47 +293,45 @@ class Model(nn.Module):
                 rendering['sigma_bs'] = ray_results['sigma_bs']
                 rendering['sigma_atten'] = ray_results['sigma_atten']
                 rendering['weights'] = weights
-
-
                 rendering['trans'] = trans
 
-            elif self.config.simon_eq and not is_prop:
-                rendering = render.volumetric_rendering_uw_simon(density=ray_results['density'],
-                                                           rgbs=ray_results['rgb'],
-                                                           c_med=ray_results['c_med'],
-                                                           alpha_bs=alpha_bs,alpha_atten=alpha_atten, trans_bs=trans_bs, trans_atten=trans_atten,
-                                                           trans=trans,
-                                                           weights=weights,
-                                                           tdist=tdist,
-                                                           sigma_bs=ray_results['sigma_bs'],sigma_atten=ray_results['sigma_atten'],
-                                                           t_far=rays.far,
-                                                           compute_extras=compute_extras,
-                                                           extras={
-                                                               k: v
-                                                               for k, v in ray_results.items()
-                                                               if k.startswith('distance') or k in ['roughness']
-                                                           })
-                # rendering['sigma_bs'] = ray_results['sigma_bs']
-                # rendering['sigma_atten'] = ray_results['sigma_bs']
-            # elif self.single_mlp:
-            #     rendering = render.volumetric_rendering_uw(density=ray_results['density'],
-            #                                                sigma_bs=ray_results['sigma_bs'],
-            #                                                rgbs=ray_results['rgb'],
-            #                                                c_med=ray_results['c_med'],
-            #                                                bs_weights=bs_weights, trans_atten=trans_atten,
-            #                                                trans=trans,
-            #                                                weights=weights, alpha=alpha,
-            #                                                tdist=tdist,
-            #                                                bg_rgb=bg_rgbs,
-            #                                                t_far=rays.far,
-            #                                                compute_extras=compute_extras,
-            #                                                extras={
-            #                                                    k: v
-            #                                                    for k, v in ray_results.items()
-            #                                                    if k.startswith('normals') or k in ['roughness']
-            #                                                })
-            #     rendering['sigma_bs'] = ray_results['sigma_bs']
-            #     # rendering['sigma_atten'] = ray_results['sigma_atten']
+            elif self.config.gen_eq and not is_prop:
+                rendering = render.volumetric_rendering_uw_gen(density=ray_results['density'],
+                                                               rgbs=ray_results['rgb'],
+                                                               c_med=ray_results['c_med'],
+                                                               alpha_bs=alpha_bs, alpha_atten=alpha_atten,
+                                                               trans_bs=trans_bs, trans_atten=trans_atten,
+                                                               trans=trans,
+                                                               weights=weights,
+                                                               tdist=tdist,
+                                                               sigma_bs=ray_results['sigma_bs'],
+                                                               sigma_atten=ray_results['sigma_atten'],
+                                                               t_far=rays.far,
+                                                               compute_extras=compute_extras,
+                                                               extras={
+                                                                   k: v
+                                                                   for k, v in ray_results.items()
+                                                                   if k.startswith('distance') or k in ['roughness']
+                                                               })
+
+                # elif self.single_mlp:
+                #     rendering = render.volumetric_rendering_uw(density=ray_results['density'],
+                #                                                sigma_bs=ray_results['sigma_bs'],
+                #                                                rgbs=ray_results['rgb'],
+                #                                                c_med=ray_results['c_med'],
+                #                                                bs_weights=bs_weights, trans_atten=trans_atten,
+                #                                                trans=trans,
+                #                                                weights=weights, alpha=alpha,
+                #                                                tdist=tdist,
+                #                                                bg_rgb=bg_rgbs,
+                #                                                t_far=rays.far,
+                #                                                compute_extras=compute_extras,
+                #                                                extras={
+                #                                                    k: v
+                #                                                    for k, v in ray_results.items()
+                #                                                    if k.startswith('normals') or k in ['roughness']
+                #                                                })
+
                 rendering['sigma_bs'] = ray_results['sigma_bs']
                 rendering['sigma_atten'] = ray_results['sigma_atten']
                 rendering['weights'] = weights
@@ -461,7 +374,6 @@ class Model(nn.Module):
                 rgb = ray_results['rgb']
                 rendering['ray_rgbs'] = (rgb.reshape((-1,) + rgb.shape[-2:]))[:n, :, :]
                 rendering['ray_tdist'] = tdist[:n, :]
-
 
                 if not is_prop and self.config.use_uw_mlp:
                     # rendering['ray_trans'] = trans_bs[:n, :,-1]
@@ -526,7 +438,7 @@ def construct_model(rng, rays, config):
 
 
 class MLP(nn.Module):
-    """A PosEnc MLP."""
+    """A MIP-NeRF MLP."""
     net_depth: int = 8  # The depth of the first part of MLP.
     net_width: int = 256  # The width of the first part of MLP.
     bottleneck_width: int = 256  # The width of the bottleneck vector.
@@ -540,15 +452,7 @@ class MLP(nn.Module):
     skip_layer_dir: int = 4  # Add a skip connection to 2nd MLP every N layers.
     num_rgb_channels: int = 3  # The number of RGB channels.
     deg_view: int = 4  # Degree of encoding for viewdirs or refdirs.
-    use_reflections: bool = False  # If True, use refdirs instead of viewdirs.
     use_directional_enc: bool = False  # If True, use IDE to encode directions.
-    # If False and if use_directional_enc is True, use zero roughness in IDE.
-    enable_pred_roughness: bool = False
-    # Roughness activation function.
-    roughness_activation: Callable[..., Any] = nn.softplus
-    roughness_bias: float = -1.  # Shift added to raw roughness pre-activation.
-    use_diffuse_color: bool = False  # If True, predict diffuse & specular colors.
-    use_specular_tint: bool = False  # If True, predict tint.
     use_n_dot_v: bool = False  # If True, feed dot(n * viewdir) to 2nd MLP.
     bottleneck_noise: float = 0.0  # Std. deviation of noise added to bottleneck.
     density_activation: Callable[..., Any] = nn.softplus  # Density activation.
@@ -566,11 +470,6 @@ class MLP(nn.Module):
     basis_subdivisions: int = 2  # Tesselation count. 'octahedron' + 1 == eye(3).
 
     def setup(self):
-        # Make sure that normals are computed if reflection direction is used.
-        if self.use_reflections and not (self.enable_pred_normals or
-                                         not self.disable_density_normals):
-            raise ValueError('Normals must be computed for reflection directions.')
-
         # Precompute and store (the transpose of) the basis being used.
         self.pos_basis_t = jnp.array(
             geopoly.generate_basis(self.basis_shape, self.basis_subdivisions)).T
@@ -650,7 +549,7 @@ class MLP(nn.Module):
                 raw_density = jnp.where(
                     raw_density > 2,
                     raw_density + self.density_noise * random.normal(
-                    density_key, raw_density.shape), raw_density)
+                        density_key, raw_density.shape), raw_density)
                 # raw_density += self.density_noise * random.normal(
                 #     density_key, raw_density.shape)
             return raw_density, x
@@ -695,23 +594,13 @@ class MLP(nn.Module):
 
         # Apply bias and activation to raw density
         density = self.density_activation(raw_density + self.density_bias)
-
         roughness = None
+
         if self.disable_rgb:
             rgb = jnp.zeros_like(means)
         else:
             if viewdirs is not None:
                 # Predict diffuse color.
-                if self.use_diffuse_color:
-                    raw_rgb_diffuse = dense_layer(self.num_rgb_channels)(x)
-
-                if self.use_specular_tint:
-                    tint = nn.sigmoid(dense_layer(3)(x))
-
-                if self.enable_pred_roughness:
-                    raw_roughness = dense_layer(1)(x)
-                    roughness = (
-                        self.roughness_activation(raw_roughness + self.roughness_bias))
 
                 # Output of the first part of MLP.
                 if self.bottleneck_width > 0:
@@ -727,22 +616,11 @@ class MLP(nn.Module):
                 else:
                     x = []
 
-                # Encode view (or reflection) directions.
-                if self.use_reflections:
-                    # Compute reflection directions. Note that we flip viewdirs before
-                    # reflecting, because they point from the camera to the point,
-                    # whereas ref_utils.reflect() assumes they point toward the camera.
-                    # Returned refdirs then point from the point to the environment.
-                    refdirs = ref_utils.reflect(-viewdirs[..., None, :], normals_to_use)
-                    # Encode reflection directions.
-                    dir_enc = self.dir_enc_fn(refdirs, roughness)
-                else:
-                    # Encode view directions.
-                    dir_enc = self.dir_enc_fn(viewdirs, roughness)
-
-                    dir_enc = jnp.broadcast_to(
-                        dir_enc[..., None, :],
-                        bottleneck.shape[:-1] + (dir_enc.shape[-1],))
+                # Encode view directions.
+                dir_enc = self.dir_enc_fn(viewdirs, roughness)
+                dir_enc = jnp.broadcast_to(
+                    dir_enc[..., None, :],
+                    bottleneck.shape[:-1] + (dir_enc.shape[-1],))
 
                 # Append view (or reflection) direction encoding to bottleneck vector.
                 x.append(dir_enc)
@@ -776,19 +654,6 @@ class MLP(nn.Module):
                                       dense_layer(self.num_rgb_channels)(x) +
                                       self.rgb_bias)
 
-            if self.use_diffuse_color:
-                # Initialize linear diffuse color around 0.25, so that the combined
-                # linear color is initialized around 0.5.
-                diffuse_linear = nn.sigmoid(raw_rgb_diffuse - jnp.log(3.0))
-                if self.use_specular_tint:
-                    specular_linear = tint * rgb
-                else:
-                    specular_linear = 0.5 * rgb
-
-                # Combine specular and diffuse components and tone map to sRGB.
-                rgb = jnp.clip(
-                    image.linear_to_srgb(specular_linear + diffuse_linear), 0.0, 1.0)
-
             # Apply padding, mapping color to [-rgb_padding, 1+rgb_padding].
             rgb = rgb * (1 + 2 * self.rgb_padding) - self.rgb_padding
 
@@ -805,7 +670,7 @@ class MLP(nn.Module):
 
 @gin.configurable
 class UWMLP(nn.Module):
-    """A PosEnc MLP."""
+    """AN UW MLP."""
     # uw_wb_val: Tuple[float]= (0.0395, 0.3078, 0.2639)
     net_depth: int = 8  # The depth of the first part of MLP.
     net_width: int = 256  # The width of the first part of MLP.
@@ -820,20 +685,14 @@ class UWMLP(nn.Module):
     skip_layer_dir: int = 4  # Add a skip connection to 2nd MLP every N layers.
     num_rgb_channels: int = 3  # The number of RGB channels.
     deg_view: int = 4  # Degree of encoding for viewdirs or refdirs.
-    use_reflections: bool = False  # If True, use refdirs instead of viewdirs.
     use_directional_enc: bool = False  # If True, use IDE to encode directions.
     # If False and if use_directional_enc is True, use zero roughness in IDE.
-    enable_pred_roughness: bool = False
-    # Roughness activation function.
-    roughness_activation: Callable[..., Any] = nn.softplus
-    roughness_bias: float = -1.  # Shift added to raw roughness pre-activation.
-    use_diffuse_color: bool = False  # If True, predict diffuse & specular colors.
-    use_specular_tint: bool = False  # If True, predict tint.
     use_n_dot_v: bool = False  # If True, feed dot(n * viewdir) to 2nd MLP.
     bottleneck_noise: float = 0.0  # Std. deviation of noise added to bottleneck.
     density_activation: Callable[..., Any] = nn.softplus  # Density activation.
     sigma_activation: Callable[..., Any] = nn.softplus
     density_bias: float = -1.  # Shift added to raw densities pre-activation.
+    water_bias: float = -1.  # Shift added to raw densities pre-activation.
     density_noise: float = 0.  # Standard deviation of noise added to raw density.
     rgb_premultiplier: float = 1.  # Premultiplier on RGB before activation.
     rgb_activation: Callable[..., Any] = nn.sigmoid  # The RGB activation.
@@ -843,20 +702,15 @@ class UWMLP(nn.Module):
     disable_density_normals: bool = False  # If True don't compute normals.
     uw_old_model: bool = False  # If True same sigmas.
     uw_fog_model: bool = False  # If True same sigmas one channel.
-    uw_rgb_dir: bool = False #  If False no view dir for
-    uw_atten_xyz: bool = False  # If False no view dir for rgb_obj
-    simon_eq: bool = False  # If True general eq.
+    uw_rgb_dir: bool = False  # If False no view dir for rgb_obj
+    uw_atten_xyz: bool = False  # If True use rgb xyz coordinates also as input for sigma_atten prediction
+    gen_eq: bool = False  # If True use general eq. (11)-(14)
     disable_rgb: bool = False  # If True don't output RGB.
     warp_fn: Callable[..., Any] = None
     basis_shape: str = 'icosahedron'  # `octahedron` or `icosahedron`.
     basis_subdivisions: int = 2  # Tesselation count. 'octahedron' + 1 == eye(3).
 
     def setup(self):
-        # Make sure that normals are computed if reflection direction is used.
-        if self.use_reflections and not (self.enable_pred_normals or
-                                         not self.disable_density_normals):
-            raise ValueError('Normals must be computed for reflection directions.')
-
         # Precompute and store (the transpose of) the basis being used.
         self.pos_basis_t = jnp.array(
             geopoly.generate_basis(self.basis_shape, self.basis_subdivisions)).T
@@ -908,9 +762,6 @@ class UWMLP(nn.Module):
 
         dense_layer = functools.partial(
             nn.Dense, kernel_init=getattr(jax.nn.initializers, self.weight_init)())
-        # rgb_activationR =  @math.safe_sig()
-        # rgb_activationG =  @math.safe_sig()
-        # rgb_activationB =  @math.safe_sig()
 
         density_key, rng = random_split(rng)
 
@@ -986,23 +837,11 @@ class UWMLP(nn.Module):
         # density = self.density_activation(raw_density + self.density_bias)
         density = self.density_activation(raw_density + self.density_bias)
 
-
         roughness = None
         if self.disable_rgb:
             rgb = jnp.zeros_like(means)
         else:
             if viewdirs is not None:
-                # Predict diffuse color.
-                if self.use_diffuse_color:
-                    raw_rgb_diffuse = dense_layer(self.num_rgb_channels)(x)
-
-                if self.use_specular_tint:
-                    tint = nn.sigmoid(dense_layer(3)(x))
-
-                if self.enable_pred_roughness:
-                    raw_roughness = dense_layer(1)(x)
-                    roughness = (
-                        self.roughness_activation(raw_roughness + self.roughness_bias))
 
                 # Output of the first part of MLP.
                 if self.bottleneck_width > 0:
@@ -1018,96 +857,56 @@ class UWMLP(nn.Module):
                 else:
                     x = []
 
-                # Encode view (or reflection) directions.
-                if self.use_reflections:
-                    # Compute reflection directions. Note that we flip viewdirs before
-                    # reflecting, because they point from the camera to the point,
-                    # whereas ref_utils.reflect() assumes they point toward the camera.
-                    # Returned refdirs then point from the point to the environment.
-                    refdirs = ref_utils.reflect(-viewdirs[..., None, :], normals_to_use)
-                    # Encode reflection directions.
-                    dir_enc = self.dir_enc_fn(refdirs, roughness)
-                else:
-                    # Encode view directions.
-                    dir_enc = self.dir_enc_fn(viewdirs, roughness)
-                    dir_enc_for_water = dir_enc
-                    dir_enc = jnp.broadcast_to(
-                        dir_enc[..., None, :],
-                        bottleneck.shape[:-1] + (dir_enc.shape[-1],))
+                # Encode view directions.
+                dir_enc = self.dir_enc_fn(viewdirs, roughness)
+                dir_enc_for_water = dir_enc
+                dir_enc = jnp.broadcast_to(
+                    dir_enc[..., None, :],
+                    bottleneck.shape[:-1] + (dir_enc.shape[-1],))
                 # water MLP
                 if glo_vec is None:
-                # if glo_vec is not None:
-                #     dir_enc_for_water = jnp.concatenate([dir_enc_for_water,glo_vec], axis=-1)
-                #     # glo_vec = jnp.broadcast_to(glo_vec[..., None, :],
-                #     #                            dir_enc_for_water.shape[:-1] + glo_vec.shape[-1:])
-                #     # dir_enc_for_water.append(glo_vec)
+
                     for i in range(self.net_depth_water):
                         dir_enc_for_water_1 = dense_layer(self.net_width_viewdirs)(dir_enc_for_water)
                         dir_enc_for_water_1 = self.density_activation(dir_enc_for_water_1)
                         if i % self.skip_layer_dir == 0 and i > 0:
                             dir_enc_for_water_1 = jnp.concatenate([dir_enc_for_water, dir_enc_for_water_1], axis=-1)
 
-                        # c_med = self.rgb_activation(
-                        #                           dense_layer(self.num_rgb_channels)(dir_enc_for_water_1)+
-                        #                         self.rgb_bias
-                        #                           )
-                        #
-                        # sigma_bs = nn.sigmoid(
-                        #                           dense_layer(self.num_rgb_channels)(dir_enc_for_water_1)
-                        #                         )
-                        #
-                        # sigma_atten = nn.sigmoid(
-                        #                           dense_layer(self.num_rgb_channels)(dir_enc_for_water_1)
-                        #                         )
-
                     c_med = self.rgb_activation(
                         dense_layer(self.num_rgb_channels)(dir_enc_for_water_1)
                     )
-                        # rgb_last_dense =  dense_layer(self.num_rgb_channels)(dir_enc_for_water_1)
-                        # c_med = self.rgb_activation((rgb_last_dense))#/jnp.asarray(self.uw_wb_val)
-                        # c_med_g = self.rgb_activation(rgb_last_dense[1])/self.uw_wb_val[1]
-                        # c_med_b = self.rgb_activation(rgb_last_dense[2])/self.uw_wb_val[2]
-                        #
-                        # c_med = jnp.concatenate([c_med_r, c_med_g, c_med_b], axis = -1)
+
                     if self.uw_fog_model:  # one sigma one color channel
                         sigma_bs = self.sigma_activation(
                             dense_layer(1)(dir_enc_for_water_1))
                     else:
                         sigma_bs = self.sigma_activation(
-                            dense_layer(self.num_rgb_channels)(dir_enc_for_water_1)+ 0)
-                    if self.uw_old_model or self.uw_fog_model or self.simon_eq:  # one sigma
+                            dense_layer(self.num_rgb_channels)(dir_enc_for_water_1) + self.water_bias)
+                    if self.uw_old_model or self.uw_fog_model:  # one sigma for both atten and bs
                         sigma_atten = sigma_bs
-                    elif self.uw_atten_xyz:
+                    elif self.uw_atten_xyz:  # use xyz for atten
                         dir_enc_for_water_1 = jnp.broadcast_to(
                             dir_enc_for_water_1[..., None, :],
                             bottleneck.shape[:-1] + (dir_enc_for_water_1.shape[-1],))
-                        dir_enc_for_water_1=jnp.concatenate([dir_enc_for_water_1,x[0]],axis=-1)
+                        dir_enc_for_water_1 = jnp.concatenate([dir_enc_for_water_1, x[0]], axis=-1)
                         sigma_atten = self.sigma_activation(
                             dense_layer(self.num_rgb_channels)(dir_enc_for_water_1))
                     else:
                         sigma_atten = self.sigma_activation(
-                            dense_layer(self.num_rgb_channels)(dir_enc_for_water_1) + 0)
+                            dense_layer(self.num_rgb_channels)(dir_enc_for_water_1) + self.water_bias)
                     if self.uw_rgb_dir:
-                        # Append view (or reflection) direction encoding to bottleneck vector.
-                            x.append(dir_enc)
-                else:
-                    sigma_bs = nn.relu(glo_vec[...,0:3])
-                    sigma_atten = nn.relu(glo_vec[...,3:6])
-                    c_med = nn.relu(glo_vec[...,6:])
-
-
+                        # Append view direction encoding to bottleneck vector.
+                        x.append(dir_enc)
+                else:  # use one sigma per image with GLO VEC - not tested!!!
+                    sigma_bs = nn.relu(glo_vec[..., 0:3])
+                    sigma_atten = nn.relu(glo_vec[..., 3:6])
+                    c_med = nn.relu(glo_vec[..., 6:])
 
                 # Append dot product between normal vectors and view directions.
                 if self.use_n_dot_v:
                     dotprod = jnp.sum(
                         normals_to_use * viewdirs[..., None, :], axis=-1, keepdims=True)
                     x.append(dotprod)
-
-                # # Append GLO vector if used.
-                # if glo_vec is not None:
-                #     glo_vec = jnp.broadcast_to(glo_vec[..., None, :],
-                #                                bottleneck.shape[:-1] + glo_vec.shape[-1:])
-                #     x.append(glo_vec)
 
                 # Concatenate bottleneck, directional encoding, and GLO.
                 x = jnp.concatenate(x, axis=-1)
@@ -1127,19 +926,6 @@ class UWMLP(nn.Module):
                                       dense_layer(self.num_rgb_channels)(x) +
                                       self.rgb_bias)
 
-            if self.use_diffuse_color:
-                # Initialize linear diffuse color around 0.25, so that the combined
-                # linear color is initialized around 0.5.
-                diffuse_linear = nn.sigmoid(raw_rgb_diffuse - jnp.log(3.0))
-                if self.use_specular_tint:
-                    specular_linear = tint * rgb
-                else:
-                    specular_linear = 0.5 * rgb
-
-                # Combine specular and diffuse components and tone map to sRGB.
-                rgb = jnp.clip(
-                    image.linear_to_srgb(specular_linear + diffuse_linear), 0.0, 1.0)
-
             # Apply padding, mapping color to [-rgb_padding, 1+rgb_padding].
             rgb = rgb * (1 + 2 * self.rgb_padding) - self.rgb_padding
 
@@ -1154,7 +940,7 @@ class UWMLP(nn.Module):
             c_med=c_med,
             sigma_bs=sigma_bs,
             sigma_atten=sigma_atten,
-            glo_vec = glo_vec
+            glo_vec=glo_vec
         )
 
 

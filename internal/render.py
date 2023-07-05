@@ -1,3 +1,5 @@
+# This file was modified by Deborah Levy
+
 # Copyright 2022 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -129,137 +131,60 @@ def cast_rays(tdist, origins, directions, radii, ray_shape, diag=True):
 
 
 def get_sorted_indices(arr1, arr2):
-
     batch_size = arr1.shape[0]
-
 
     # Create an empty list to store the sorted indexes
     sorted_indexes1 = []
     sorted_indexes2 = []
 
     # Loop through the arrays in the batch
-    for (array1,array2) in zip(arr1,arr2):
+    for (array1, array2) in zip(arr1, arr2):
         # Get the indexes of the sorted array
 
-     # Combine the two arrays and sort them
-        combined = jnp.concatenate((array1, array2),axis=-1)
+        # Combine the two arrays and sort them
+        combined = jnp.concatenate((array1, array2), axis=-1)
         combined = jnp.sort(combined)
         # Get the indices of each element in the sorted array
-        indices1  = jnp.where(jnp.isin( array1,combined),size=array1.size)[0]
-        indices2  = jnp.where(jnp.isin( array2,combined),size=array2.size)[0]
+        indices1 = jnp.where(jnp.isin(array1, combined), size=array1.size)[0]
+        indices2 = jnp.where(jnp.isin(array2, combined), size=array2.size)[0]
         sorted_indexes1.append(indices1)
         sorted_indexes2.append(indices2)
-    if batch_size>1:
-        return jnp.expand_dims(jnp.array(sorted_indexes1),axis=[1,2]), jnp.expand_dims(jnp.array(sorted_indexes2),axis=[1,2])
+    if batch_size > 1:
+        return jnp.expand_dims(jnp.array(sorted_indexes1), axis=[1, 2]), jnp.expand_dims(jnp.array(sorted_indexes2),
+                                                                                         axis=[1, 2])
     else:
         return jnp.array(sorted_indexes1), jnp.array(sorted_indexes2)
 
 
+def compute_alpha_weights_uw(density_obj, sigma_bs, sigma_atten, tdist, dirs):
+    """Helper function for computing alpha compositing weights for UWMLP with equations (22) from SeaThru-NeRF."""
 
-
-def compute_alpha_weights_uw(density_obj, sigma_bs, sigma_atten, tdist, dirs,c_med, opaque_background=False):
-    """Helper function for computing alpha compositing weights."""
-    # tdist =  jnp.concatenate([
-    #   jnp.zeros_like(tdist[..., -1:]),
-    #   tdist[..., :-1]
-    # ],
-    #   axis=-1)
     t_delta = tdist[..., 1:] - tdist[..., :-1]
-    # t_dist_bs = (jnp.linspace(0, jax.lax.stop_gradient(tdist[..., 0]), 33 ,axis=-1)) #TODO: uncomment for extra samples
-    # t_dist_bs_sort = (jnp.concatenate([ t_dist_bs[...,:-1], jax.lax.stop_gradient(tdist)], axis=-1))# TODO: uncomment for extra samples
-    # t_delta_bs = t_dist_bs_sort[..., 1:] - t_dist_bs_sort[..., :-1] #TODO: uncomment for extra samples
-    # # # # indices_t_dist, indices2 = get_sorted_indices(tdist, t_dist_bs[...,:-1])
-    # trans_obj_bs = jnp.ones_like(t_dist_bs) #TODO: uncomment for extra samples
-    # trans_obj_bs = trans_obj_bs[...,:-1] #TODO: uncomment for extra samples
-    # t_delta_bs = jnp.repeat(jnp.expand_dims(t_delta_bs, -1), t_delta.shape[-1], 1)
-    # t_delta = rendering['tdist'][..., 1:] - rendering['tdist'][..., :-1]
-    # jax.debug.print("{y}", y=t_delta[:, 0])
-    # delta = jnp.concatenate([
-    #   t_delta[..., :-1],
-    #   density_obj[..., -1:] *
-    #   jnp.zeros_like(t_delta[..., -1:], jnp.inf)
-    # ],
-    #   axis=-1)
+
     delta = t_delta * jnp.linalg.norm(dirs[..., None, :], axis=-1)
-    delta_bs = jax.lax.stop_gradient(t_delta) * jnp.linalg.norm(dirs[..., None, :], axis=-1) #TODO: uncomment for extra samples
-    # delta_bs = jax.lax.stop_gradient(t_delta) * jnp.linalg.norm(dirs[..., None, :], axis=-1)
-        # delta_bs = t_delta* jnp.linalg.norm(dirs[..., None, :], axis=-1)
+    delta_bs = jax.lax.stop_gradient(t_delta) * jnp.linalg.norm(dirs[..., None, :], axis=-1)
 
-
-
-
-
-
-    # density_delta = jnp.where(density_obj<=delta, 0, density_obj * delta)
-    # delta_bs = delta
     density_delta = density_obj * delta
 
-
-    # delta_density = density_obj*delta_bs
-    # density_delta = jnp.concatenate([
-    #       density_delta[..., :-1],
-    #       density_obj[..., -1:] *
-    #       jnp.full_like(density_delta[..., -1:],jnp.inf)
-    #   ],
-    #                                   axis=-1)
-
-    # Equivalent to making the final t-interval infinitely wide.
-    # bs_delta = sigma_bs[..., None, :] * jax.lax.stop_gradient
     bs_delta = sigma_bs[..., None, :] * (delta_bs[..., None])
 
-    # bs_delta_alpha = sigma_bs[..., None, :] * (delta_bs[..., None])
-    # bs_delta_trans = sigma_atten[..., None, :] * (delta_bs[..., None])
-
-    # bs_delta_uni = sigma_bs[..., None, :] * delta_bs_uni[...,None]
-    # bs_delta = jnp.concatenate([
-    #       bs_delta[..., :-1,:],
-    #       jnp.full_like(bs_delta[..., -1:,:], jnp.inf)
-    #   ],
-    #                                   axis=-2)
-
     alpha_bs = 1 - jnp.exp(-bs_delta)
-    # alpha_bs = 1-jnp.exp(-jnp.concatenate([
-    #     jnp.zeros_like(bs_delta[..., :1,:]),
-    #     bs_delta[..., :-1,:]
-    # ],
-    #                                  axis=-2))
 
     trans_bs = jnp.exp(-jnp.concatenate([
         jnp.zeros_like(bs_delta[..., :1, :]),
         jnp.cumsum(bs_delta[..., :-1, :], axis=-2)
     ],
         axis=-2))
-    # trans_bs = jnp.exp(
-    #     -jnp.cumsum(bs_delta, axis=-2)
-    #
-    #                                  )
-    # delta_bs_atten = delta_bs[...,:(t_dist_bs.shape[-1]-1)]
-    # print(delta_bs_atten[..., None].shape)
-    atten_delta = sigma_atten[..., None, :] * (delta[..., None])
-    # atten_delta_bs = sigma_atten[..., None, :] *delta_bs_atten[..., None]# TODO: uncomment for extra samples
-    # atten_delta = sigma_bs[..., None, :] * (delta[..., None])
-    # atten_delta_bs = sigma_bs[..., None, :] * delta_bs_atten[..., None]
-    # atten_delta = sigma_atten* delta[...,None]
+    bs_weights = alpha_bs * trans_bs
 
-    # atten_delta = jnp.concatenate([
-    #       atten_delta[..., :-1,:],
-    #       jnp.full_like(atten_delta[..., -1:,:], jnp.inf)
-    #   ],
-    #                                   axis=-2)
-    # print(atten_delta_bs.sum(axis=-2)[..., None, :].shape)
-    # trans_atten = jnp.exp(-jnp.concatenate([
-    #     jnp.zeros_like(atten_delta[..., :1, :]),
-    #     jnp.cumsum(atten_delta[..., :-1, :], axis=-2)+atten_delta_bs.sum(axis=-2)[..., None, :] ],
-    #     axis=-2))
+    atten_delta = sigma_atten[..., None, :] * (delta_bs[..., None])
+
     trans_atten = jnp.exp(-jnp.concatenate([
         jnp.zeros_like(atten_delta[..., :1, :]),
         jnp.cumsum(atten_delta[..., :-1, :], axis=-2)
     ],
         axis=-2))
 
-    # trans_atten = jnp.exp(-
-    #     jnp.cumsum(atten_delta, axis=-2))
-
     alpha = 1 - jnp.exp(-density_delta)
     trans = jnp.exp(-jnp.concatenate([
         jnp.zeros_like(density_delta[..., :1]),
@@ -267,91 +192,31 @@ def compute_alpha_weights_uw(density_obj, sigma_bs, sigma_atten, tdist, dirs,c_m
     ],
         axis=-1))
 
-    # trans_obj_clipped = jnp.where(
-    #    trans>= 0.5,
-    #     1, 0)
-    #
-    # trans_obj_bs.at[...,
-    #                 (trans_obj_bs.shape[-1]-t_delta.shape[-1]):].set(trans)
-    # (`weights` is only guaranteed to sum to <= 1, not == 1).
-
-    # trans_obj_bs = jnp.concatenate([trans_obj_bs,trans],axis=-1) #TODO: uncomment for extra samples
-    # for ind in range(trans_obj_bs.shape[-1]-1)[::-1]:
-    #     if ~jnp.isin(jnp.array(ind)[...,None],indices_t_dist):
-    #         trans_obj_bs.at[...,ind].set(trans_obj_bs[...,ind + 1][0])
-
-    # trans = jnp.exp(-
-    #     jnp.cumsum(density_delta, axis=-1))
-
-    # trans_o_bs = jnp.concatenate([trans[...,:1],trans[...,1:]*jnp.exp(-density_delta[...,1:])],axis=-1)
     weights = alpha * trans
-    # weights = jax.nn.relu(weights-0.1)
-    # bs_weights = (alpha_bs * trans_bs*trans_obj_bs[...,None]* c_med[..., None, :]).sum(axis=-2) #TODO: uncomment for extra samples
-    bs_weights = alpha_bs * trans_bs
-    #
-
-    # density_obj_small = density_obj
-    # idx = jnp.where(density_obj<4,size=density_obj.size)
-    # density_obj_small=density_obj_small.at[idx[-1]].set(0)
-    # alpha_aug = 1 - jnp.exp(-density_obj_small*delta)
-    # trans_aug = jnp.exp(-jnp.concatenate([
-    #     jnp.zeros_like(-(density_obj_small*delta)[..., :1]),
-    #     jnp.cumsum(-(density_obj_small*delta)[..., :-1], axis=-1)
-    # ],
-    #                                  axis=-1))
-    # weights_aug = alpha_aug*trans_aug
-    # bs_weights = alpha_bs * trans_bs
-    # return weights, (alpha_bs * trans_bs*trans_obj_bs[...,None]), trans, bs_weights, trans_atten, alpha_bs, trans_bs #TODO: uncomment for extra samples
     return weights, alpha, trans, bs_weights, trans_atten, alpha_bs, trans_bs
 
 
-def compute_alpha_weights_uw_simon(density_obj, sigma_bs, sigma_atten, tdist, dirs, opaque_background=False):
-    """Helper function for computing alpha compositing weights."""
+def compute_alpha_weights_uw_gen(density_obj, sigma_bs, sigma_atten, tdist, dirs):
+    """Helper function for computing alpha compositing weights for UWMLP with equations (11)-(14) from SeaThru-NeRF."""
     t_delta = tdist[..., 1:] - tdist[..., :-1]
-    # t_dist_bs = (jnp.linspace(0, jax.lax.stop_gradient(tdist[..., 0]), 33, axis=-1))
-    # t_dist_bs_sort = (jnp.concatenate([t_dist_bs[..., :-1], jax.lax.stop_gradient(tdist)], axis=-1))
-    # t_delta_bs = t_dist_bs_sort[..., 1:] - t_dist_bs_sort[..., :-1]
-    # # # # indices_t_dist, indices2 = get_sorted_indices(tdist, t_dist_bs[...,:-1])
-    # trans_obj_bs = jnp.ones_like(t_dist_bs)
-    # trans_obj_bs = trans_obj_bs[..., :-1]
-
 
     delta_bs = jax.lax.stop_gradient(t_delta) * jnp.linalg.norm(dirs[..., None, :], axis=-1)
-
-
     delta = t_delta * jnp.linalg.norm(dirs[..., None, :], axis=-1)
     density_delta = density_obj * delta
-    # density_delta = jnp.concatenate([
-    #       density_delta[..., :-1],
-    #       density_obj[..., -1:] *
-    #       jnp.full_like(density_delta[..., -1:],jnp.inf)
-    #   ],
-    #                                   axis=-1)
-
-    # Equivalent to making the final t-interval infinitely wide.
     bs_delta = sigma_bs[..., None, :] * delta_bs[..., None]
-    # bs_delta = jnp.concatenate([
-    #       bs_delta[..., :-1,:],
-    #       jnp.full_like(bs_delta[..., -1:,:], jnp.inf)
-    #   ],
-    #                                   axis=-2)
-
     alpha_bs = 1 - jnp.exp(-bs_delta) * jnp.exp(-density_delta)[..., None]
     trans_bs = jnp.exp(-jnp.concatenate([
         jnp.zeros_like(bs_delta[..., :1, :]),
         jnp.cumsum(bs_delta[..., :-1, :], axis=-2)
     ],
         axis=-2))
-    # bs_weights = alpha_bs*trans_bs
-    #
-    atten_delta = sigma_atten[..., None, :] * delta_bs[...,None]
+    atten_delta = sigma_atten[..., None, :] * delta_bs[..., None]
     alpha_atten = 1 - jnp.exp(-atten_delta) * jnp.exp(-density_delta)[..., None]
     trans_atten = jnp.exp(-jnp.concatenate([
-        jnp.zeros_like(atten_delta[..., :1,:]),
-        jnp.cumsum(atten_delta[..., :-1,:], axis=-2)
+        jnp.zeros_like(atten_delta[..., :1, :]),
+        jnp.cumsum(atten_delta[..., :-1, :], axis=-2)
     ],
-                                     axis=-2))
-
+        axis=-2))
     alpha = 1 - jnp.exp(-density_delta)
     trans = jnp.exp(-jnp.concatenate([
         jnp.zeros_like(density_delta[..., :1]),
@@ -359,17 +224,15 @@ def compute_alpha_weights_uw_simon(density_obj, sigma_bs, sigma_atten, tdist, di
     ],
         axis=-1))
     weights = alpha * trans
-    # trans_obj_bs = jnp.concatenate([trans_obj_bs,trans],axis=-1)
 
-    return weights, alpha, trans, alpha_bs, trans_bs,alpha_atten,trans_atten
+    return weights, alpha, trans, alpha_bs, trans_bs, alpha_atten, trans_atten
 
 
 def compute_alpha_weights(density, tdist, dirs, opaque_background=False):
-    """Helper function for computing alpha compositing weights."""
+    """Helper function for computing alpha compositing weights for propMLP with no medium module."""
     t_delta = tdist[..., 1:] - tdist[..., :-1]
 
     delta = t_delta * jnp.linalg.norm(dirs[..., None, :], axis=-1)
-    # density_delta = jnp.where(density <= 10 * delta, 0, density * delta)
     density_delta = density * delta
 
     if opaque_background:
@@ -390,22 +253,23 @@ def compute_alpha_weights(density, tdist, dirs, opaque_background=False):
     return weights, alpha, trans
 
 
-# TODO: add uw_volometric_rendering
-
-def volumetric_rendering_uw(density, sigma_bs, rgbs, c_med, bs_weights,
-                            trans_atten, trans, weights, alpha,
+def volumetric_rendering_uw(density, rgbs, c_med, bs_weights,
+                            trans_atten, trans, weights,
                             tdist,
-                            bg_rgbs,
                             t_far,
                             compute_extras,
                             extras=None):
-    """Volumetric Rendering Function.
+    """Volumetric Rendering Function for UWMLP with equations (22) from SeaThru-NeRF .
 
     Args:
-      rgbs: jnp.ndarray(float32), color, [batch_size, num_samples, 3]
-      weights: jnp.ndarray(float32), weights, [batch_size, num_samples].
+      density : jnp.ndarray(float32), object's density, [batch_size, num_samples].
+      rgbs: jnp.ndarray(float32), object's color, [batch_size, num_samples, 3].
+      c_med : jnp.ndarray(float32), medium's color, [batch_size, 1, 3].
+      bs_weights: jnp.ndarray(float32), medium's (additive component) weights, [batch_size, num_samples, 3].
+      trans_atten : jnp.ndarray(float32), medium's attenuation transmission,  exp(-sigma_atten*s_i) , [batch_size, num_samples, 3].
+      trans: jnp.ndarray(float32), object's transmission, [batch_size, num_samples].
+      weights: jnp.ndarray(float32), object's weights, [batch_size, num_samples].
       tdist: jnp.ndarray(float32), [batch_size, num_samples].
-      bg_rgbs: jnp.ndarray(float32), the color(s) to use for the background.
       t_far: jnp.ndarray(float32), [batch_size, 1], the distance of the far plane.
       compute_extras: bool, if True, compute extra quantities besides color.
       extras: dict, a set of values along rays to render by alpha compositing.
@@ -416,27 +280,15 @@ def volumetric_rendering_uw(density, sigma_bs, rgbs, c_med, bs_weights,
     """
     eps = jnp.finfo(jnp.float32).eps
     rendering = {}
-
-    acc = weights.sum(axis=-1)
-    bg_w = jnp.minimum(acc[..., None], 1 - acc[..., None])  # The weight of the background.
-    # rgb = (weights[..., None] * rgbs).sum(axis=-2) + bg_w * bg_rgbs
-    # sum_weights = (weights[..., None]*trans_atten +bs_weights * trans[..., None]).sum(axis=-2)
-
-    # norm_weights_direct = jax.nn.softmax(weights,axis=-1)#*trans_atten,axis=-2)
-    # norm_weights_bs = jax.nn.softmax(bs_weights * trans[..., None] ,axis=-2)
-
-    J = (weights[..., None] * rgbs).sum(axis=-2)
-    direct = (weights[..., None] * trans_atten * rgbs).sum(axis=-2) ##(bg_w * bg_rgbs).sum(axis=-2)
     t_mids = 0.5 * (tdist[..., :-1] + tdist[..., 1:])
+    acc = weights.sum(axis=-1)
+    bg_w = jnp.maximum(0, 1 - acc[..., None])  # The weight of the background.
 
-    # bs = (c_med[..., None, :]*(1-jnp.exp(-sigma_bs[..., None, :]*weights[..., None]*t_mids[..., None]))).sum(axis=-2)
-    bs = (trans[..., None]*bs_weights* c_med[..., None, :]).sum(axis=-2)  # TODO Naama changes, broadcast for c_med
-    # bs = bs_weights #TODO: uncomment for extra samples
-    # J = (weights[..., None] * rgbs).sum(axis=-2)
-    # direct = (norm_weights_direct * rgbs).sum(axis=-2)
-    # bs = (norm_weights_bs* c_med[..., None, :]).sum(axis=-2)
-    rgb = direct + bs  # + bg_w * bg_rgb# J
+    J = jax.lax.stop_gradient((weights[..., None] * rgbs).sum(axis=-2))  # clean Images
+    direct = (weights[..., None] * trans_atten * rgbs).sum(axis=-2)  # C_obj
+    bs = (trans[..., None] * bs_weights * c_med[..., None, :]).sum(axis=-2)  # C_med
 
+    rgb = direct + bs
     rendering['rgb'] = rgb
     rendering['bs'] = bs
     rendering['density'] = density
@@ -444,22 +296,6 @@ def volumetric_rendering_uw(density, sigma_bs, rgbs, c_med, bs_weights,
     rendering['direct'] = direct
     rendering['c_med'] = c_med
     rendering['t_dist'] = tdist
-    # rendering['direct_weights'] = (weights[..., None] * trans_atten).sum(axis=-2)
-    # rendering['bs_weights'] = alpha.sum(axis=-2)
-    # rendering['bs_weights'] = (trans[..., None]*bs_weights).sum(axis=-2)
-    expectation = lambda x: (weights * x).sum(axis=-1) / jnp.maximum(eps, acc)
-    rendering['distance_mean'] = (
-        jnp.clip(
-            jnp.nan_to_num(jnp.exp(expectation(jnp.log(t_mids))), jnp.inf),
-            tdist[..., 0], tdist[..., -1]))
-    t_aug = jnp.concatenate([tdist, t_far], axis=-1)
-    weights_aug = jnp.concatenate([weights, bg_w], axis=-1)
-
-    ps = [5, 50, 95]
-    distance_percentiles = stepfun.weighted_percentile(t_aug, weights_aug, ps)
-    for i, p in enumerate(ps):
-        s = 'median' if p == 50 else 'percentile_' + str(p)
-        rendering['distance_' + s] = distance_percentiles[..., i]
 
     if compute_extras:
         rendering['acc'] = acc
@@ -468,33 +304,19 @@ def volumetric_rendering_uw(density, sigma_bs, rgbs, c_med, bs_weights,
             for k, v in extras.items():
                 if v is not None:
                     rendering[k] = (weights[..., None] * v).sum(axis=-2)
-        # acc2 = weights_aug.sum(axis=-1)
-        # acc_2 = ((weights*jnp.mean(trans_atten,axis=-1))+(jnp.mean(bs_weights,axis=-1) * trans)).sum(axis=-1)
-        # expectation = lambda x: (((weights*jnp.mean(trans_atten,axis=-1))+(jnp.mean(bs_weights,axis=-1) * trans))*x).sum(axis=-1) / jnp.maximum(eps, acc_2)
-        expectation = lambda x: (weights * x).sum(axis=-1) / jnp.maximum(eps, acc)
-        # expectation = lambda x: jnp.where(weights==weights.max(axis=-1)).max(axis=-1)#sum(axis=-1) #/ jnp.maximum(eps, acc)
 
-        expectation_3c = lambda x: (weights[..., None] * x).sum(axis=-2) / eps  # jnp.maximum(eps, acc[..., None]
+        expectation = lambda x: (weights * x).sum(axis=-1) / jnp.maximum(eps, acc)
+        expectation_3c = lambda x: (weights[..., None] * x).sum(axis=-2) / eps
         if trans_atten.shape[-1] == 3:
             rendering['E_map'] = jax.lax.stop_gradient(expectation_3c(trans_atten))
         else:
             rendering['E_map'] = jax.lax.stop_gradient(expectation(trans_atten[..., 0]))
 
-        # jax.debug.print("{y}", y=t_mids[:, 0])
-        # rendering['distance_check'] = jax.lax.stop_gradient(expectation(t_mids))
         # For numerical stability this expectation is computing using log-distance.
         rendering['distance_mean'] = (
             jnp.clip(
                 jnp.nan_to_num(jnp.exp(expectation(jnp.log(t_mids))), jnp.inf),
                 tdist[..., 0], tdist[..., -1]))
-
-        # rendering['distance_mean'] = (
-        #   jnp.clip(
-        #     jnp.nan_to_num((expectation((t_mids))), jnp.inf),
-        #     tdist[..., 0], jnp.inf))
-        # idx = jnp.where(weights==weights.max(axis=-1),size=weights.max(axis=-1).size)
-        # idx = jnp.argmax(weights,axis=-1)
-        # rendering['distance_mean']=jnp.take(t_mids,idx)   #.at[idx].set(tdist[idx])
 
         # Add an extra fencepost with the far distance at the end of each ray, with
         # whatever weight is needed to make the new weight vector sum to exactly 1
@@ -513,7 +335,7 @@ def volumetric_rendering_uw(density, sigma_bs, rgbs, c_med, bs_weights,
             emap_percentiles = stepfun.weighted_percentile(trans_atten[..., 0], weights[:, :-1], ps)
 
         for i, p in enumerate(ps):
-            s = 'median' if p == 50 else  'percentile_' + str(p)
+            s = 'median' if p == 50 else 'percentile_' + str(p)
             rendering['distance_' + s] = distance_percentiles[..., i]
             if trans_atten.shape[-1] == 3:
                 rendering['E_map_' + s] = emap_percentiles[:, :, i]
@@ -523,20 +345,28 @@ def volumetric_rendering_uw(density, sigma_bs, rgbs, c_med, bs_weights,
     return rendering
 
 
-def volumetric_rendering_uw_simon(density, rgbs, c_med, alpha_bs,alpha_atten,
-                                  trans_bs,trans_atten, trans, weights,
-                                  tdist,
-                                  sigma_bs,sigma_atten,
-                                  t_far,
-                                  compute_extras,
-                                  extras=None):
-    """Volumetric Rendering Function.
+def volumetric_rendering_uw_gen(density, rgbs, c_med, alpha_bs, alpha_atten,
+                                trans_bs, trans_atten, trans, weights,
+                                tdist,
+                                sigma_bs, sigma_atten,
+                                t_far,
+                                compute_extras,
+                                extras=None):
+    """Volumetric Rendering Function for UWMLP with equations (11)-(14) from SeaThru-NeRF.
 
     Args:
-      rgbs: jnp.ndarray(float32), color, [batch_size, num_samples, 3]
-      weights: jnp.ndarray(float32), weights, [batch_size, num_samples].
+      density : jnp.ndarray(float32), object's density, [batch_size, num_samples].
+      rgbs: jnp.ndarray(float32), object's color, [batch_size, num_samples, 3].
+      c_med : jnp.ndarray(float32), medium's color, [batch_size, 1, 3].
+      alpha_bs: jnp.ndarray(float32), joint alpha for C_med - medium's and object's ,1-exp(-sigma_obj_i*delta_i)*exp(-sigma_bs*s_i), [batch_size, num_samples, 3].
+      alpha_atten: jnp.ndarray(float32), joint alpha for C_obj - medium's and object's ,1-exp(-sigma_obj_i*delta_i)*exp(-sigma_atten*s_i), [batch_size, num_samples, 3].
+      trans_bs : jnp.ndarray(float32), medium's backscatter transmission,  exp(-sigma_bs*s_i) , [batch_size, num_samples, 3].
+      trans_atten : jnp.ndarray(float32), medium's attenuation transmission,  exp(-sigma_atten*s_i) , [batch_size, num_samples, 3].
+      trans: jnp.ndarray(float32), object's transmission, [batch_size, num_samples].
+      weights: jnp.ndarray(float32), object's weights, [batch_size, num_samples].
       tdist: jnp.ndarray(float32), [batch_size, num_samples].
-      bg_rgbs: jnp.ndarray(float32), the color(s) to use for the background.
+      sigma_bs: jnp.ndarray(float32), backscatter density, [batch_size, 1, 3].
+      sigma_atten: jnp.ndarray(float32), attenuation density, [batch_size, 1, 3].
       t_far: jnp.ndarray(float32), [batch_size, 1], the distance of the far plane.
       compute_extras: bool, if True, compute extra quantities besides color.
       extras: dict, a set of values along rays to render by alpha compositing.
@@ -550,15 +380,14 @@ def volumetric_rendering_uw_simon(density, rgbs, c_med, alpha_bs,alpha_atten,
 
     acc = weights.sum(axis=-1)
     bg_w = jnp.maximum(0, 1 - acc[..., None])  # The weight of the background.
-    # rgb = (weights[..., None] * rgbs).sum(axis=-2) + bg_w * bg_rgbs
-    J = (weights[..., None] * rgbs).sum(axis=-2)
-    # direct = ((density[..., None] * rgbs * trans[..., None] * trans_bs * alpha_bs) / (density + sigma_bs)).sum(axis=-2)
-    direct = ((density[..., None] * rgbs * trans[..., None] * trans_atten * alpha_atten) / (density[..., None] + sigma_atten[..., None, :])).sum(axis=-2)
+    J = jax.lax.stop_gradient((weights[..., None] * rgbs).sum(axis=-2))
+    direct = ((density[..., None] * rgbs * trans[..., None] * trans_atten * alpha_atten) / (
+            density[..., None] + sigma_atten[..., None, :])).sum(axis=-2)
 
-    bs = ((sigma_bs[..., None, :] * c_med[..., None, :] * trans[..., None] * trans_bs * alpha_bs) / (density[..., None] + sigma_bs[..., None, :])).sum(
-        axis=-2)  # TODO Naama changes, broadcast for c_med
-    rgb = direct + bs  # J
-    acc = weights.sum(axis=-1)
+    bs = ((sigma_bs[..., None, :] * c_med[..., None, :] * trans[..., None] * trans_bs * alpha_bs) / (
+            density[..., None] + sigma_bs[..., None, :])).sum(
+        axis=-2)
+    rgb = direct + bs
 
     rendering['rgb'] = rgb
     rendering['bs'] = bs
@@ -610,7 +439,7 @@ def volumetric_rendering(rgbs,
                          t_far,
                          compute_extras,
                          extras=None):
-    """Volumetric Rendering Function.
+    """Volumetric Rendering Function for propMLP with no medium module.
 
     Args:
       rgbs: jnp.ndarray(float32), color, [batch_size, num_samples, 3]
@@ -627,7 +456,6 @@ def volumetric_rendering(rgbs,
     """
     eps = jnp.finfo(jnp.float32).eps
     rendering = {}
-
     acc = weights.sum(axis=-1)
     bg_w = jnp.maximum(0, 1 - acc[..., None])  # The weight of the background.
     rgb = (weights[..., None] * rgbs).sum(axis=-2) + bg_w * bg_rgbs
@@ -636,7 +464,6 @@ def volumetric_rendering(rgbs,
 
     if compute_extras:
         rendering['acc'] = acc
-
         if extras is not None:
             for k, v in extras.items():
                 if v is not None:

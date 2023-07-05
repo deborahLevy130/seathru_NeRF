@@ -1,3 +1,4 @@
+# This file was modified by Deborah Levy
 # Copyright 2022 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -77,7 +78,7 @@ class NeRFSceneManager(pycolmap.SceneManager):
 
     self.load_cameras()
     self.load_images()
-    self.load_points3D()  # For now, we do not need the point cloud data.
+    # self.load_points3D()  # For now, we do not need the point cloud data.
 
     # Assume shared intrinsics between all cameras.
     cam = self.cameras[1]
@@ -105,49 +106,6 @@ class NeRFSceneManager(pycolmap.SceneManager):
     # Image names from COLMAP. No need for permuting the poses according to
     # image names anymore.
     names = [imdata[k].name for k in imdata]
-    posefile = os.path.join(self.folder, 'poses_bounds.npy')
-    if utils.file_exists(posefile):
-      with utils.open_file(posefile, 'rb') as fp:
-        poses_arr = np.load(fp)
-      bounds = poses_arr[:, -2:]
-    else:
-      bounds = np.array([0.01, 1.])
-    # Depth supervision
-    sc = 1. / (bounds.min() * .75)
-    Err_mean = np.mean(self.point3D_errors)
-    data_list = []
-    for id_im in range(1, len(self.images) + 1):
-      # depth_image = np.zeros_like()
-      depth_list = []
-      coord_list = []
-      weight_list = []
-      points = self.get_points3D(id_im, return_points2D=True, return_colors=False)
-      for i in range(len(points[0])):
-        point2D = np.zeros(2,dtype=np.int64)
-        point2D[0] = (np.round(points[1][i][1]))
-        point2D[1] = (np.round(points[1][i][0]))
-        point3D = points[0][i]
-        depth = (poses[id_im - 1, :3, 2].T @ (point3D - poses[id_im - 1, :3, 3])) * sc
-        if depth < bounds[id_im - 1, 0] * sc or depth > bounds[id_im - 1, 1] * sc:
-          continue
-        err = points[2][i]
-        weight = 2 * np.exp(-(err / Err_mean) ** 2)
-        depth_list.append(depth)
-        coord_list.append(point2D)
-        weight_list.append(weight)
-      if len(depth_list) > 0:
-        print(id_im, len(depth_list), np.min(depth_list), np.max(depth_list), np.mean(depth_list))
-        data_list.append({"depth": np.array(depth_list), "coord": np.array(coord_list), "error": np.array(weight_list)})
-      else:
-        print(id_im, len(depth_list))
-    # json.dump(data_list, open(data_file, "w"))
-
-
-
-
-
-
-
 
     # Switch from COLMAP (right, down, fwd) to NeRF (right, up, back) frame.
     poses = poses @ np.diag([1, -1, -1, 1])
@@ -190,7 +148,7 @@ class NeRFSceneManager(pycolmap.SceneManager):
       params['k4'] = cam.k4
       camtype = camera_utils.ProjectionType.FISHEYE
 
-    return names, poses, pixtocam, params, camtype,data_list
+    return names, poses, pixtocam, params, camtype
 
 
 def load_blender_posedata(data_dir, split=None):
@@ -310,7 +268,6 @@ class Dataset(threading.Thread, metaclass=abc.ABCMeta):
     self._apply_bayer_mask = config.apply_bayer_mask
     self._cast_rays_in_train_step = config.cast_rays_in_train_step
     self._render_spherical = False
-    self.depth_loss = config.depth_loss
 
     self.split = utils.DataSplit(split)
     self.data_dir = data_dir
@@ -491,14 +448,9 @@ class Dataset(threading.Thread, metaclass=abc.ABCMeta):
     batch['rays'] = rays
     if not self.render_path:
       batch['rgb'] = self.images[cam_idx, pix_y_int, pix_x_int]
-      if self.depth_loss:
-        batch['gt_depth'] =  self.depth_images[cam_idx,pix_y_int,pix_x_int]
-        batch['errors'] = self.error_images[cam_idx,pix_y_int,pix_x_int]
 
       if isinstance(cam_idx,int):
         batch['rgb_path'] = self.images_files[cam_idx]
-      # else:
-      #   batch['rgb_path'] = self.images_files[0]
     else:
       batch['rgb_path'] = self.render_path
     if self._load_disps:
@@ -645,7 +597,7 @@ class LLFF(Dataset):
     else:
       # Attempt to load Blender/NGP format if COLMAP data not present.
       pose_data = load_blender_posedata(self.data_dir)
-    image_names, poses, pixtocam, distortion_params, camtype,depth_list = pose_data
+    image_names, poses, pixtocam, distortion_params, camtype = pose_data
 
     # Previous NeRF results were generated with images sorted by filename,
     # use this flag to ensure metrics are reported on the same test set.
@@ -662,7 +614,7 @@ class LLFF(Dataset):
     self.camtype = camtype
 
     raw_testscene = False
-    split_for_data_loading = utils.DataSplit('train') if config.eval_on_train else self.split # TODO Naama
+    split_for_data_loading = utils.DataSplit('train') if config.eval_on_train else self.split
     if config.rawnerf_mode:
       # Load raw images and metadata.
       images, metadata, raw_testscene = raw_utils.load_raw_dataset(
@@ -675,8 +627,11 @@ class LLFF(Dataset):
 
     else:
       # Load images.
-      colmap_image_dir = os.path.join(self.data_dir, 'images')
-      image_dir = os.path.join(self.data_dir, 'images' + image_dir_suffix)
+      colmap_image_dir = os.path.join(self.data_dir, 'images_wb')
+      if config.factor > 1:
+        image_dir = os.path.join(self.data_dir, 'images_wb' + image_dir_suffix)
+      else:
+        image_dir = colmap_image_dir
       for d in [image_dir, colmap_image_dir]:
         if not utils.file_exists(d):
           raise ValueError(f'Image folder {d} does not exist.')
@@ -710,30 +665,6 @@ class LLFF(Dataset):
     else:
       bounds = np.array([0.01, 1.])
     self.colmap_to_world_transform = np.eye(4)
-    # Load Depths
-    if config.depth_loss:
-      depthManager = NeRFSceneManager(colmap_dir)
-      # Depth supervision
-      depth_list = []
-      weight_list = []
-      for id_im in range(0, len(image_paths) ):
-        depth_image = np.zeros((images.shape[1],images.shape[2]),dtype=images.dtype)
-        weight_image = np.zeros((images.shape[1],images.shape[2]),dtype=images.dtype)
-
-        points = pose_data[5][id_im]['coord']
-        depths = pose_data[5][id_im]['depth']
-        weights = pose_data[5][id_im]['error']
-        for i in range(len(pose_data[5][id_im]['depth'])):
-          point2D = points[i]
-          depth_image[point2D[0]-1,point2D[1]-1]  = depths[i]
-          weight_image[point2D[0]-1,point2D[1]-1] = weights[i]
-
-        depth_list.append(depth_image)
-        weight_list.append(weight_image)
-        print(id_im)
-      self.depth_images = np.stack(depth_list, axis=0)
-      self.error_images = np.stack(weight_list, axis=0)
-
 
     # Separate out 360 versus forward facing scenes.
     if config.forward_facing:
@@ -789,15 +720,10 @@ class LLFF(Dataset):
         utils.DataSplit.TRAIN: train_indices,
     }
 
-    # print("DEBUG Naama ", split_for_data_loading)
-    # print("DEBUG Naama ", split_indices)
-    # print("DEBUG Naama ", self.images_files)
-    indices = split_indices[split_for_data_loading]  # TODO Naama
+
+    indices = split_indices[split_for_data_loading]
     # All per-image quantities must be re-indexed using the split indices.
     images = images[indices]
-    if config.depth_loss:
-      depth_images = self.depth_images[indices]
-      error_images = self.error_images[indices]
 
     if split_for_data_loading == utils.DataSplit.TRAIN:
       self.images_files = [self.images_files[i] for i, v in enumerate(indices) if v]
@@ -814,9 +740,7 @@ class LLFF(Dataset):
     self.images = images
     self.camtoworlds = self.render_poses if config.render_path else poses
     self.height, self.width = images.shape[1:3]
-    if config.depth_loss:
-      self.depth_images = depth_images
-      self.error_images = error_images
+
 
 class TanksAndTemplesNerfPP(Dataset):
   """Subset of Tanks and Temples Dataset as processed by NeRF++."""
