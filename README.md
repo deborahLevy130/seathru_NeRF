@@ -17,7 +17,8 @@ This implementation is written in [JAX](https://github.com/google/jax).
 ```
 # Clone the repo.
 git clone https://github.com/deborahLevy130/seathru_NeRF.git
-cd seathru_NeRF_code
+cd seathru_NeRF
+mkdir data
 
 # Make a conda environment.
 conda create --name seathruNeRF python=3.9
