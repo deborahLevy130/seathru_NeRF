@@ -104,12 +104,16 @@ my_dataset_dir/sparse/0/  <--- COLMAP sparse reconstruction files (cameras, imag
 my_dataset_dir/poses_bounds.npy
 ```
 ### How to implement SeaThru-NeRF in your own NeRF
-In order to integrate our NeRF in an existing NeRF you need to implement the following steps:
 
-1. Add the medium's module to the MLP. The module's architecture can be found in the paper in section 4.5. Implementation and Optimization and in the code [here](https://github.com/deborahLevy130/seathru_NeRF/blob/master/internal/models.py#L866)  
-2. Change the rendering equations according to the paper
-3. Add the accuracy loss from the paper on the object's transmission, my implementation is [here](https://github.com/deborahLevy130/seathru_NeRF/blob/master/internal/train_utils.py#L153) 
-   If you have a different loss which encourages the weights of your rendering equations to be uni-modal you can use it instead of the accuracy loss. Just apply it on weights of the objects.
+To incorporate our NeRF into an existing NeRF framework, follow these steps:
+
+1. Incorporate the medium's module into the MLP by referring to the architecture provided in section 4.5 of the paper titled "Implementation and Optimization." You can also refer to the code available [here](https://github.com/deborahLevy130/seathru_NeRF/blob/master/internal/models.py#L866).
+
+2. Modify the rendering equations as outlined in the paper.
+
+3. Integrate the accuracy loss described in the paper for the object's transmission. You can refer to our implementation available [here](https://github.com/deborahLevy130/seathru_NeRF/blob/master/internal/train_utils.py#L153). If you have an alternative loss function that encourages the weights of your rendering equations to be somehow Unimodal (or close to Dirac delta function), you may use it instead of the accuracy loss. Simply apply it to the weights of the objects.
+
+
 
 
 
