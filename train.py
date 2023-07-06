@@ -37,8 +37,7 @@ import numpy as np
 
 import wandb
 import wandb
-wandb.login(key ='eb49909999ce7a472bbdacdec6fdfeda5bc69583' ,force =True)
-wandb.init(project="test-project", entity="seathru-nerf",mode="disabled")
+wandb.init()
 
 
 configs.define_common_flags()
@@ -105,7 +104,7 @@ def main(unused_argv):
     # Prefetch_buffer_size = 3 x batch_size.
     pdataset = flax.jax_utils.prefetch_to_device(dataset, 3)
     rng = rng + jax.host_id()  # Make random seed separate across hosts.
-    rngs = random.split(rng, jax.local_device_count())  # For pmapping RNG keys.  # TODO uncomment
+    rngs = random.split(rng, jax.local_device_count())  # For pmapping RNG keys.
     gc.disable()  # Disable automatic garbage collection for efficiency.
     total_time = 0
     total_steps = 0
