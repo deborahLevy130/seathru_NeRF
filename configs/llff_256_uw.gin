@@ -4,11 +4,11 @@ Config.far = 1.
 Config.factor = 1
 Config.forward_facing = True
 Config.adam_eps = 1e-8
-Config.batch_size = 2048
+Config.batch_size = 16384
 Config.print_every = 1000
 Config.eval_on_train = False
 Config.eval_only_once = True
-Config.train_render_every = 1000
+Config.train_render_every = 5000
 Config.use_uw_mlp = True
 Config.use_uw_acc_weights_loss = False
 Config.use_uw_acc_trans_loss= True
@@ -23,13 +23,17 @@ Config.uw_initial_acc_trans_loss_mult = 0.0001
 Config.uw_final_acc_trans_loss_mult = 0.0001
 Config.use_uw_sig_med_loss = False
 Config.uw_sig_med_mult = 0.0001
-Config.gen_eq = False
-Config.uw_fog_model = True
-UWMLP.uw_old_model = False
-UWMLP.uw_fog_model = True
+Config.gen_eq = False  #need to update the values twice, I know it's annoying, I will solve it soon and update the code
 UWMLP.gen_eq = False
-UWMLP.uw_rgb_dir = False
+Config.uw_fog_model = False
+UWMLP.uw_fog_model = False
+Config.uw_atten_xyz = False
 UWMLP.uw_atten_xyz = False
+Config.uw_old_model = False
+UWMLP.uw_old_model= False  #need to update the values twice, I know it's annoying, I will solve it soon and update the code
+
+UWMLP.uw_rgb_dir = False
+
 Config.lr_init = 0.002
 Config.lr_final = 0.00002
 #Model.num_glo_features = 9
@@ -60,3 +64,4 @@ UWMLP.density_bias = 0
 
 UWMLP.max_deg_point = 16
 PropMLP.max_deg_point = 16
+

@@ -18,7 +18,7 @@
 
 SCENE=Panama
 EXPERIMENT=uw
-EXPERIMENT_NAME=debug_fog
+EXPERIMENT_NAME=debug_config_uwmlp_xyz_atten
 DATA_DIR=data/
 CHECKPOINT_DIR=ckpt/"$EXPERIMENT"/"$SCENE"_"$EXPERIMENT_NAME"
 

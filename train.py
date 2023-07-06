@@ -343,7 +343,7 @@ def main(unused_argv):
 
                 for k, v in vis_suite.items():
                     # summary_writer.image('test_output_' + k, v, step)
-                    if k in ['sigma_bs', 'sigma_atten'] and config.uw_fog_model:
+                    if k in ['sigma_bs', 'sigma_atten'] and (config.uw_fog_model or config.uw_atten_xyz):
                         continue
                     else:
                         summ_fn_wandb(f'test/output_{k}', wandb.Image(np.asarray(v)), step)

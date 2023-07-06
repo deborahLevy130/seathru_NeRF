@@ -226,7 +226,7 @@ class Model(nn.Module):
                     density_obj=ray_results['density'],
                     sigma_bs=ray_results['sigma_bs'],
                     sigma_atten=ray_results['sigma_atten'],
-                    tdist=tdist, dirs=rays.directions
+                    tdist=tdist, dirs=rays.directions, xyz_atten=self.config.uw_atten_xyz
                 )
 
 

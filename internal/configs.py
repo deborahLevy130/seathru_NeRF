@@ -170,15 +170,15 @@ class Config:
     uw_final_acc_weights_loss_mult: float = 0.01  # final mult factor for acc_weights_loss  after uw_decay_acc iterations
     uw_final_acc_trans_loss_mult: float = 0.01  # final mult factor for acc_trans_loss after uw_decay_acc iterations
     uw_acc_loss_factor: float = 6  # factor which encourages one of the terms in the accuracy loss to be more dominant - for the trans it encourages it to be 1 and for the weights zero.
-    uw_sig_med_mult: float = 0.01 #mult factor for std loss - not in the paper!!
+    uw_sig_med_mult: float = 0.01  # mult factor for std loss - not in the paper!!
     # uw_usual_rendering : int = 600
     # uw_final_usual_rendering: int = 1500
-    uw_fog_model: bool = False
-    uw_decay_acc: int = 5000  #number of iterations to change acc_loss_mult value
-    gen_eq: bool = False  # use equtions (11)-(14) from the paper instead of (22)
-
-
-
+    uw_old_model: bool = False  # If True same sigmas for attenuation and backscatter.
+    uw_decay_acc: int = 5000  # number of iterations to change acc_loss_mult value
+    gen_eq: bool = False  # use equations (11)-(14) from the paper instead of (22)
+    uw_atten_xyz: bool = False  # If True use rgb xyz coordinates also as input for sigma_atten prediction
+    uw_fog_model: bool = False  # If True same sigmas for attenuation and backscatter and for the same for all color channels.
+    uw_rgb_dir: bool = False #If True use view_dir also as input for rgb_obj
 
 def define_common_flags():
     # Define the flags used by both train.py and eval.py

@@ -3,7 +3,7 @@
 #### [project page](https://sea-thru-nerf.github.io/) | [paper](https://openaccess.thecvf.com/content/CVPR2023/papers/Levy_SeaThru-NeRF_Neural_Radiance_Fields_in_Scattering_Media_CVPR_2023_paper.pdf)
 
 > SeaThru-NeRF: Neural Radiance Fields In Scattering Media
-> [Deborah Levy](mailto:dlrun14@gmail.com) | Amit Peleg | Naama Pearl | Dan Rosenbaum | [Derya Akkaynak](https://www.deryaakkaynak.com/) | [Tali Treibitz](https://www.viseaon.haifa.ac.il/) | [Simon Korman](https://www.cs.haifa.ac.il/~skorman/)
+> [Deborah Levy](mailto:dlrun14@gmail.com) | Amit Peleg | [Naama Pearl](https://naamapearl.github.io/) | Dan Rosenbaum | [Derya Akkaynak](https://www.deryaakkaynak.com/) | [Tali Treibitz](https://www.viseaon.haifa.ac.il/) | [Simon Korman](https://www.cs.haifa.ac.il/~skorman/)
 > CVPR 2023
 
 
@@ -83,13 +83,17 @@ You will find the underwater rendering, the restored images rendering (J) and th
 ## Datasets
 
 [Here](https://drive.google.com/uc?export=download&id=1RzojBFvBWjUUhuJb95xJPSNP3nJwZWaT) you will find the underwater scenes from the paper.
-Extract the files into the data folder and you can train SeaThru-NeRF with those scenes:
+Extract the files into the data folder and train SeaThru-NeRF with those scenes:
 
 ```
 ./scripts/train_llff_uw.sh
 ```
 
 In ```'${SCENE}'``` put the name of the scene you wish to work with. 
+
+For more datasets formats you can refer to [multinerf](https://github.com/google-research/multinerf)
+
+For now our NeRF works on looking forward scenes.
 
 ### Running SeaThru-NeRF on your own data
 
@@ -100,10 +104,13 @@ my_dataset_dir/images_wb/    <--- all input images
 my_dataset_dir/sparse/0/  <--- COLMAP sparse reconstruction files (cameras, images, points)
 my_dataset_dir/poses_bounds.npy
 ```
-### Integrating SeaThru-NeRF in your NeRF
+### How to implement SeaThru-NeRF in your own NeRF
 In order to integrate our NeRF in an existing NeRF you need to implement the following steps:
 
-1. add the medium's module to the MLP. It has the same architecture the  
+1. Add the medium's module to the MLP. The module's architecture can be found in the paper in section 4.5. Implementation and Optimization and in the code [here](https://github.com/deborahLevy130/seathru_NeRF/blob/master/internal/models.py#L866)  
+2. Change the rendering equations according to the paper
+3. Add the accuracy loss from the paper on the object's transmission, my implementation is [here](https://github.com/deborahLevy130/seathru_NeRF/blob/master/internal/train_utils.py#L153) 
+   If you have a different loss which encourages the weights of your rendering equations to be uni-modal you can use it instead of the accuracy loss. Just apply it on weights of the objects.
 
 
 

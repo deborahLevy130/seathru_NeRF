@@ -156,7 +156,7 @@ def get_sorted_indices(arr1, arr2):
         return jnp.array(sorted_indexes1), jnp.array(sorted_indexes2)
 
 
-def compute_alpha_weights_uw(density_obj, sigma_bs, sigma_atten, tdist, dirs):
+def compute_alpha_weights_uw(density_obj, sigma_bs, sigma_atten, tdist, dirs,xyz_atten = False):
     """Helper function for computing alpha compositing weights for UWMLP with equations (22) from SeaThru-NeRF."""
 
     t_delta = tdist[..., 1:] - tdist[..., :-1]
@@ -176,8 +176,10 @@ def compute_alpha_weights_uw(density_obj, sigma_bs, sigma_atten, tdist, dirs):
     ],
         axis=-2))
     bs_weights = alpha_bs * trans_bs
-
-    atten_delta = sigma_atten[..., None, :] * (delta_bs[..., None])
+    if xyz_atten:
+        atten_delta = sigma_atten * (delta_bs[..., None])
+    else:
+        atten_delta = sigma_atten[..., None, :] * (delta_bs[..., None])
 
     trans_atten = jnp.exp(-jnp.concatenate([
         jnp.zeros_like(atten_delta[..., :1, :]),
