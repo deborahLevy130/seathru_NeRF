@@ -79,10 +79,9 @@ set `SCENE` and `EXPERIMENT_NAME` to the corresponding experiment.
 
 Your output video should now exist in the directory `ckpt/uw/${SCENE}_${EXPERIMENT_NAME}/render/`.
 You will find the underwater rendering, the restored images rendering (J) and the depth maps.
-## Dataset
+## Dataset - Photos credit - Matan Yuval
 
 [Here](https://drive.google.com/uc?export=download&id=1RzojBFvBWjUUhuJb95xJPSNP3nJwZWaT) you will find the underwater scenes from the paper. 
-Photos credit - Matan Yuval
 Extract the files into the data folder and train SeaThru-NeRF with those scenes:
 
 ```
