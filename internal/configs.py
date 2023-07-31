@@ -181,6 +181,9 @@ class Config:
     uw_fog_model: bool = False  # If True same sigmas for attenuation and backscatter and for the same for all color channels.
     uw_rgb_dir: bool = False #If True use view_dir also as input for rgb_obj
 
+    extra_samples: bool = False # If true add extra samples to the beginning of the bs component - (for fog sim)
+
+
 def define_common_flags():
     # Define the flags used by both train.py and eval.py
     flags.DEFINE_string('mode', None, 'Required by GINXM, not used.')

@@ -226,8 +226,7 @@ class Model(nn.Module):
                     density_obj=ray_results['density'],
                     sigma_bs=ray_results['sigma_bs'],
                     sigma_atten=ray_results['sigma_atten'],
-                    tdist=tdist, dirs=rays.directions, xyz_atten=self.config.uw_atten_xyz
-                )
+                    tdist=tdist, dirs=rays.directions,c_med = ray_results['c_med'], xyz_atten=self.config.uw_atten_xyz, extra_samples=self.config.extra_samples)
 
 
             elif self.config.gen_eq and not is_prop:
@@ -284,7 +283,7 @@ class Model(nn.Module):
                                                            weights=weights,
                                                            tdist=tdist,
                                                            t_far=rays.far,
-                                                           compute_extras=compute_extras,
+                                                           compute_extras=compute_extras, extra_samples=self.config.extra_samples,
                                                            extras={
                                                                k: v
                                                                for k, v in ray_results.items()

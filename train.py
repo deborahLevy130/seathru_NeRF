@@ -37,7 +37,8 @@ import numpy as np
 
 import wandb
 import wandb
-wandb.init()
+wandb.login(key ='7e961cb73a49859e316510f248a7a28a3ea2d8bf' ,force =True)
+wandb.init(project="my-awesome-project")
 
 
 configs.define_common_flags()
@@ -233,8 +234,6 @@ def main(unused_argv):
 
                 precision = int(np.ceil(np.log10(config.max_steps))) + 1
                 avg_loss = avg_stats['loss']
-                if avg_loss>1:
-                    print(f'hara al hahaim sheli_ {step=} {avg_loss=} ')
                 avg_psnr = avg_stats['psnr']
                 summ_fn_wandb('train/total_loss', avg_stats['loss'], step)
                 str_losses = {  # Grab each "losses_{x}" field and print it as "x[:4]".
