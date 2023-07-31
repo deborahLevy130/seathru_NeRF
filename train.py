@@ -37,8 +37,8 @@ import numpy as np
 
 import wandb
 import wandb
-wandb.login(key ='7e961cb73a49859e316510f248a7a28a3ea2d8bf' ,force =True)
-wandb.init(project="my-awesome-project")
+wandb.login()
+
 
 
 configs.define_common_flags()
