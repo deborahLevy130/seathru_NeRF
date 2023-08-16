@@ -713,7 +713,7 @@ class UWMLP(nn.Module):
         # Precompute and store (the transpose of) the basis being used.
         self.pos_basis_t = jnp.array(
             geopoly.generate_basis(self.basis_shape, self.basis_subdivisions)).T
-        self.net_depth_water = 6
+        self.net_depth_water = 1
         # Precompute and define viewdir or refdir encoding function.
         if self.use_directional_enc:
             self.dir_enc_fn = ref_utils.generate_ide_fn(self.deg_view)
@@ -864,9 +864,9 @@ class UWMLP(nn.Module):
                     bottleneck.shape[:-1] + (dir_enc.shape[-1],))
                 # water MLP
                 if glo_vec is None:
-
+                    dir_enc_for_water_1 = dir_enc_for_water
                     for i in range(self.net_depth_water):
-                        dir_enc_for_water_1 = dense_layer(self.net_width_viewdirs)(dir_enc_for_water)
+                        dir_enc_for_water_1 = dense_layer(self.net_width_viewdirs)(dir_enc_for_water_1)
                         dir_enc_for_water_1 = self.density_activation(dir_enc_for_water_1)
                         if i % self.skip_layer_dir == 0 and i > 0:
                             dir_enc_for_water_1 = jnp.concatenate([dir_enc_for_water, dir_enc_for_water_1], axis=-1)
