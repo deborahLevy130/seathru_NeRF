@@ -108,10 +108,11 @@ my_dataset_dir/poses_bounds.npy
 To incorporate our NeRF into an existing NeRF framework, follow these steps:
 
 1. Incorporate the medium's module into the MLP by referring to the architecture provided in section 4.5 of the paper titled "Implementation and Optimization." You can also refer to the code available [here](https://github.com/deborahLevy130/seathru_NeRF/blob/master/internal/models.py#L866).
+Update(17.08.23): The water net depth is 1
 
-2. Modify the rendering equations as outlined in the paper.
+3. Modify the rendering equations as outlined in the paper.
 
-3. Integrate the accuracy loss described in the paper for the object's transmission. You can refer to our implementation available [here](https://github.com/deborahLevy130/seathru_NeRF/blob/master/internal/train_utils.py#L153). If you have an alternative loss function that encourages the weights of your rendering equations to be somehow Unimodal (or close to Dirac delta function), you may use it instead of the accuracy loss. Simply apply it to the weights of the objects.
+4. Integrate the accuracy loss described in the paper for the object's transmission. You can refer to our implementation available [here](https://github.com/deborahLevy130/seathru_NeRF/blob/master/internal/train_utils.py#L153). If you have an alternative loss function that encourages the weights of your rendering equations to be somehow Unimodal (or close to Dirac delta function), you may use it instead of the accuracy loss. Simply apply it to the weights of the objects.
 
 
 
